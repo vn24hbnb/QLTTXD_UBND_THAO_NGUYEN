@@ -221,28 +221,29 @@
 
     if (map) return;
 
-    // Khởi tạo Leaflet Map với cơ chế Zoom động học CSS3 mượt mà
-    // Giữ nguyên ảnh vệ tinh trong suốt quá trình zoom (ảnh phóng to theo, không bao giờ bị đen hình)
+    // Leaflet animate ảnh tile hiện tại trong lúc zoom, rồi mới yêu cầu lưới tile ở mức mới.
     map = L.map('google-map', {
       center: MAP_CENTER,
       zoom: MAP_ZOOM,
-      zoomSnap: 0.25,          // Cho phép mức zoom mịn từng bước 0.25
-      zoomDelta: 0.5,          // Tỷ lệ co giãn tự nhiên
-      wheelPxPerZoomLevel: 85, // Tỷ lệ thuận theo tốc độ: vuốt/lăn chuột nhanh -> zoom lướt nhanh; vuốt nhẹ -> zoom êm
-      wheelDebounceTime: 30,   // Phản hồi mượt mà tức thì
-      scrollWheelZoom: true,   // BẬT cơ chế zoom CSS3 hardware-accelerated của Leaflet: ảnh vệ tinh zoom theo trực tiếp
+      zoomSnap: 0.5,
+      zoomDelta: 0.5,
+      wheelPxPerZoomLevel: 100,
+      wheelDebounceTime: 40,
+      zoomAnimation: true,
+      scrollWheelZoom: true,
       zoomControl: false,      // Dùng bộ điều khiển nổi chuẩn Google
       attributionControl: true,
-      maxZoom: 22,
+      maxZoom: 20,
       minZoom: 11
     });
 
-    // 1. LỚP VỆ TINH GOOGLE HYBRID (TĂNG CƯỜNG KỸ THUẬT SỐ ĐẾN 22X KHÔNG ĐEN HÌNH)
+    // 1. LỚP VỆ TINH GOOGLE HYBRID
     tileLayers.satellite = L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
       subdomains: ['0', '1', '2', '3'],
-      maxNativeZoom: 18,     // Máy chủ phục vụ đến mức 18; từ 19-22 Leaflet scale trực tiếp bằng GPU mượt mà
-      maxZoom: 22,
-      keepBuffer: 12,
+      maxNativeZoom: 18,
+      maxZoom: 20,
+      keepBuffer: 3,
+      updateWhenZooming: false,
       attribution: '© Google Satellite Hybrid | Phường Thảo Nguyên'
     });
 
@@ -250,16 +251,18 @@
     tileLayers.roadmap = L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
       subdomains: ['0', '1', '2', '3'],
       maxNativeZoom: 19,
-      maxZoom: 22,
-      keepBuffer: 12,
+      maxZoom: 20,
+      keepBuffer: 3,
+      updateWhenZooming: false,
       attribution: '© Google Maps Roadmap'
     });
 
-    // 3. LỚP ẢNH VỆ TINH ESRI (Dự phòng độ nét cao có digital zoom 22x)
+    // 3. LỚP ẢNH VỆ TINH ESRI (Lớp nền dự phòng)
     tileLayers.esri = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
       maxNativeZoom: 18,
-      maxZoom: 22,
-      keepBuffer: 12,
+      maxZoom: 20,
+      keepBuffer: 3,
+      updateWhenZooming: false,
       attribution: 'Tiles © Esri World Imagery'
     });
 

@@ -97,22 +97,12 @@ path:focus-visible {
   cursor: crosshair !important;
 }
 
-/* TỐI ƯU HÓA RENDER ẢNH VỆ TINH PHÓNG TO THEO CAMERA KHÔNG BỊ ĐEN HÌNH */
+/* Nền dự phòng trong lúc ảnh bản đồ đang tải */
 .leaflet-tile-pane {
   background-color: #0d1726;
 }
 .leaflet-tile {
-  will-change: transform;
   image-rendering: auto;
-}
-.leaflet-zoom-animated {
-  will-change: transform;
-}
-  color: #ffd600;
-  font-size: 14px;
-  font-weight: 600;
-  z-index: 2;
-  pointer-events: none;
 }
 
 .google-spinner {
@@ -205,6 +195,8 @@ path:focus-visible {
 }
 
 .google-searchbox {
+  width: 100%;
+  min-width: 0;
   height: 48px;
   background: #ffffff;
   border-radius: 28px;
@@ -228,6 +220,7 @@ path:focus-visible {
   color: var(--google-grey-700);
   cursor: pointer;
   display: flex;
+  flex: 0 0 36px;
   align-items: center;
   justify-content: center;
   transition: background 0.15s ease;
@@ -238,6 +231,7 @@ path:focus-visible {
 
 .google-search-input {
   flex: 1;
+  min-width: 0;
   border: none;
   outline: none;
   background: transparent;
@@ -259,6 +253,7 @@ path:focus-visible {
   background: transparent;
   cursor: pointer;
   display: flex;
+  flex: 0 0 36px;
   align-items: center;
   justify-content: center;
 }
@@ -267,6 +262,7 @@ path:focus-visible {
 }
 
 .google-search-divider {
+  flex: 0 0 1px;
   width: 1px;
   height: 24px;
   background-color: var(--google-grey-300);
@@ -274,6 +270,7 @@ path:focus-visible {
 }
 
 .google-account-btn {
+  flex: 0 0 auto;
   border: none;
   background: transparent;
   cursor: pointer;
@@ -296,23 +293,21 @@ path:focus-visible {
 
 /* HÀNG FILTER CHIPS CHUẨN GOOGLE */
 .google-chips-scroll {
-  overflow-x: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  padding-bottom: 4px;
-}
-.google-chips-scroll::-webkit-scrollbar {
-  display: none;
+  width: min(760px, calc(100vw - 32px));
+  overflow: visible;
 }
 
 .google-chips-bar {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  width: max-content;
+  width: 100%;
 }
 
 .google-chip {
-  height: 34px;
+  min-height: 34px;
+  height: auto;
+  flex: 0 0 auto;
   padding: 0 14px;
   border-radius: 20px;
   background: #ffffff;
@@ -1404,20 +1399,7 @@ path:focus-visible {
   }
 }
 
-/* ==========================================================================
-   TỐI ƯU HÓA ZOOM MƯỢT MÀ VÀ PHÓNG TO KỸ THUẬT SỐ TĂNG CƯỜNG (DIGITAL ZOOM 22X)
-   ========================================================================== */
-
-/* Tránh giật hình khi phóng to/thu nhỏ, tối ưu hiệu năng GPU */
-.leaflet-tile-container {
-  will-change: transform;
-}
-
-.leaflet-tile {
-  image-rendering: auto;
-  image-rendering: -webkit-optimize-contrast;
-  transition: transform 0.12s cubic-bezier(0, 0, 0.2, 1) !important;
-}
+/* Leaflet tự quản lý transform của ảnh tile trong animation zoom. */
 
 /* Hiệu ứng hào quang phát sáng (Neon Glow) cho Ranh giới Phường Thảo Nguyên */
 .thao-nguyen-glow {
