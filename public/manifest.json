@@ -1,0 +1,20 @@
+{
+  "name": "Quản lý Trật tự Xây dựng Phường Thảo Nguyên",
+  "short_name": "QLTTXD Thảo Nguyên",
+  "description": "Ứng dụng theo dõi và kiểm tra trật tự xây dựng phường Thảo Nguyên, thị xã Mộc Châu, tỉnh Sơn La",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#0284c7",
+  "lang": "vi",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+.git
+.local-secrets
+.env*
+!.env.example
+node_modules
+backups
+data/*.db*
+data/uploads
+docs/reviews
+supabase
+tests
+scripts
+Dockerfile
+*.log
+docs/reviews/evidence

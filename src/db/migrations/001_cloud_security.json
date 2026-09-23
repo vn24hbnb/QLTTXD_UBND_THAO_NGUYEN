@@ -1,0 +1,41 @@
+{
+  "addColumns": {
+    "permits": {
+      "basement_floors": "INTEGER DEFAULT 0",
+      "mezzanine_floors": "INTEGER DEFAULT 0",
+      "building_height": "REAL",
+      "red_line_setback": "TEXT",
+      "construction_boundary": "TEXT",
+      "ground_elevation": "TEXT",
+      "building_density": "REAL",
+      "exterior_color": "TEXT",
+      "land_lot": "TEXT",
+      "design_by": "TEXT",
+      "design_doc": "TEXT",
+      "land_use_cert": "TEXT",
+      "expiration_date": "TEXT"
+    },
+    "complaints": {
+      "master_complaint_id": "TEXT REFERENCES complaints(id)",
+      "merged_at": "TEXT",
+      "merged_reason": "TEXT",
+      "reply_approved_at": "TEXT",
+      "reply_approved_by": "TEXT REFERENCES users(id)",
+      "version_id": "INTEGER NOT NULL DEFAULT 1"
+    },
+    "inspections": {
+      "snapshot_json": "TEXT",
+      "measured_setback_rear": "REAL"
+    },
+    "idempotency_keys": {
+      "request_hash": "TEXT"
+    },
+    "violations": {
+      "version_id": "INTEGER NOT NULL DEFAULT 1",
+      "snapshot_json": "TEXT"
+    }
+  },
+  "statements": [
+    "CREATE INDEX IF NOT EXISTS idx_complaints_master ON complaints(master_complaint_id)"
+  ]
+}

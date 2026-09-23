@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1a73e8">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <title>Bản đồ Quản lý Trật tự Xây dựng Phường Thảo Nguyên</title>
+
+  <!-- Leaflet CSS & Fonts -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="google-maps-app">
+
+  <!-- Bản đồ Vệ tinh Toàn màn hình -->
+  <div id="google-map" class="google-map-canvas" role="region" aria-label="Bản đồ Vệ tinh Trật tự Xây dựng Phường Thảo Nguyên"></div>
+
+  <!-- Thanh cảnh báo Mất mạng / Ngoại tuyến chuẩn Google Snackbar -->
+  <div id="network-toast" class="google-snackbar" role="alert" aria-live="assertive">
+    <span class="google-snackbar-icon">⚡</span>
+    <span id="network-toast-text">Mất kết nối mạng. Hãy lưu nháp trước khi đóng phiếu.</span>
+  </div>
+
+  <!-- Hộp Thông báo Toast -->
+  <div id="google-toast" class="google-toast" role="status" aria-live="polite"></div>
+
+  <!-- Lớp phủ mờ khi mở Drawer hoặc Modal -->
+  <div id="google-scrim" class="google-scrim"></div>
+
+  <!-- THANH TÌM KIẾM NỔI GOOGLE (FLOATING OMNIBOX) & FILTER CHIPS -->
+  <div class="google-search-container">
+    <div class="google-searchbox" role="search">
+      <button type="button" class="google-icon-btn" id="btn-menu" aria-label="Mở menu quản lý">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+          <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+        </svg>
+      </button>
+
+      <input type="text" id="google-search-input" class="google-search-input"
+             placeholder="Tìm số GPXD, địa chỉ, tổ dân phố..."
+             aria-label="Tìm kiếm công trình">
+
+      <button type="button" class="google-icon-btn" id="btn-search-clear" aria-label="Xóa tìm kiếm" style="display:none;">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+        </svg>
+      </button>
+
+      <button type="button" class="google-search-action-btn" id="btn-search-submit" aria-label="Tìm kiếm">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="#5f6368">
+          <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+        </svg>
+      </button>
+
+      <div class="google-search-divider"></div>
+
+      <!-- Nút Chuyển đổi Vai trò / Avatar người dùng -->
+      <button type="button" class="google-account-btn" id="btn-account" aria-label="Tài khoản và vai trò" title="Đăng nhập hoặc xem phiên cán bộ">
+        <div class="google-avatar" id="google-avatar">ND</div>
+      </button>
+    </div>
+
+    <!-- HÀNG FILTER CHIPS CHUẨN GOOGLE (DƯỚI SEARCHBOX) -->
+    <div class="google-chips-scroll">
+      <div class="google-chips-bar" role="tablist">
+        <button type="button" class="google-chip active" data-filter="all" role="tab" aria-selected="true">
+          <span>Tất cả</span>
+          <span class="chip-count" id="count-all">0</span>
+        </button>
+        <button type="button" class="google-chip chip-warning" data-filter="check" role="tab" aria-selected="false">
+          <span class="chip-dot dot-warn"></span>
+          <span>Cần kiểm tra</span>
+          <span class="chip-count" id="count-check">0</span>
+        </button>
+        <button type="button" class="google-chip chip-info" data-filter="building" role="tab" aria-selected="false">
+          <span class="chip-dot dot-info"></span>
+          <span>Đang thi công</span>
+          <span class="chip-count" id="count-building">0</span>
+        </button>
+        <button type="button" class="google-chip chip-danger" data-filter="violation" role="tab" aria-selected="false">
+          <span class="chip-dot dot-danger"></span>
+          <span>Vi phạm</span>
+          <span class="chip-count" id="count-violation">0</span>
+        </button>
+        <button type="button" class="google-chip chip-success" data-filter="done" role="tab" aria-selected="false">
+          <span class="chip-dot dot-success"></span>
+          <span>Hoàn thành</span>
+          <span class="chip-count" id="count-done">0</span>
+        </button>
+        <button type="button" class="google-chip chip-complaint" data-filter="complaint" data-access="staff" hidden role="tab" aria-selected="false">
+          <span class="chip-dot dot-complaint"></span>
+          <span>Phản ánh dân</span>
+          <span class="chip-count" id="count-complaints">0</span>
+        </button>
+        <button type="button" class="google-chip" id="chip-fit-boundary" title="Khớp toàn cảnh ranh giới Phường Thảo Nguyên">
+          <span style="color:#0284c7;font-size:14px;">📍</span>
+          <span>Ranh giới Thảo Nguyên</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tài khoản cán bộ được xác thực bởi máy chủ -->
+  <div id="google-account-popup" class="google-popup google-elevation-3">
+    <div class="account-popup-header">
+      <div class="account-avatar-large" id="popup-avatar">ND</div>
+      <div class="account-info"><strong id="popup-username">Người dân (Công khai)</strong><span id="popup-role-badge" class="google-badge badge-primary">Người dân</span></div>
+    </div>
+    <div class="account-divider"></div>
+    <div class="account-role-options">
+      <button type="button" id="btn-login" class="account-role-item"><span class="role-icon">🏛️</span><span class="role-desc"><strong>Đăng nhập cán bộ</strong><small>Dùng tài khoản do đơn vị cấp</small></span></button>
+      <button type="button" id="btn-logout" class="account-role-item" hidden><span class="role-icon">↪</span><strong>Đăng xuất</strong></button>
+    </div>
+  </div>
+
+  <!-- THẺ THÔNG TIN CÔNG TRÌNH (GOOGLE PLACE CARD / BOTTOM SHEET) -->
+  <aside id="google-place-card" class="google-place-card google-elevation-3" aria-label="Chi tiết công trình đang chọn" style="display:none;">
+    <div class="sheet-drag-handle"></div>
+    <div class="place-card-scroll">
+      <div class="place-header">
+        <div class="place-badges">
+          <span id="place-status-badge" class="google-badge badge-primary">Đang thi công</span>
+          <span id="place-ward-badge" class="google-badge badge-neutral">Phường Thảo Nguyên</span>
+        </div>
+        <button type="button" class="google-icon-btn place-close-btn" id="btn-close-place" aria-label="Đóng chi tiết">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="place-title-section">
+        <h2 id="place-title" class="place-title">Nhà ở gia đình kết hợp dịch vụ</h2>
+        <div class="place-subtitle">
+          <strong id="place-permit-num" class="place-permit-num">01/2026/GPXD</strong>
+          <span class="place-dot">·</span>
+          <span id="place-address" class="place-address">Tổ 1, Phường Thảo Nguyên</span>
+        </div>
+      </div>
+
+      <!-- HÀNG NÚT HÀNH ĐỘNG TRÒN CHUẨN GOOGLE MAPS -->
+      <div class="google-action-buttons">
+        <button type="button" class="google-action-btn" id="act-inspect" data-access="inspect" hidden title="Tiến hành kiểm tra hiện trường">
+          <div class="action-btn-circle circle-primary">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+              <path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm-2 14l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
+            </svg>
+          </div>
+          <span>Kiểm tra</span>
+        </button>
+
+        <button type="button" class="google-action-btn" id="act-violation" data-access="staff" hidden title="Xem biên bản vi phạm">
+          <div class="action-btn-circle circle-warning">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+              <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+            </svg>
+          </div>
+          <span>Biên bản</span>
+        </button>
+
+        <button type="button" class="google-action-btn" id="act-print" title="In phiếu thông tin thử nghiệm">
+          <div class="action-btn-circle circle-neutral">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+              <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/>
+            </svg>
+          </div>
+          <span>In A4/QR</span>
+        </button>
+
+        <button type="button" class="google-action-btn" id="act-report-site" title="Gửi phản ánh tại vị trí này">
+          <div class="action-btn-circle circle-danger">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+              <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 12h-2v-2h2v2zm0-4h-2V6h2v4z"/>
+            </svg>
+          </div>
+          <span>Phản ánh</span>
+        </button>
+      </div>
+
+      <!-- TIẾN TRÌNH 4 MỐC KIỂM TRA HIỆN TRƯỜNG (GOOGLE STEPPER) -->
+      <div class="place-section">
+        <div class="section-heading">
+          <strong>Tiến độ 4 mốc kiểm tra hiện trường</strong>
+          <span id="place-stages-count" class="badge-count">2/4 mốc</span>
+        </div>
+        <div class="google-stepper" id="place-stepper">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- BẢNG CHỈ TIÊU KỸ THUẬT CÔNG TRÌNH -->
+      <div class="place-section">
+        <div class="section-heading">
+          <strong>Thông số kỹ thuật cấp phép</strong>
+        </div>
+        <div class="tech-specs-grid" id="place-tech-specs">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- LỊCH SỬ KIỂM TRA & VI PHẠM -->
+      <div class="place-section" id="place-history-section">
+        <div class="section-heading">
+          <strong>Lịch sử kiểm tra & Biên bản</strong>
+        </div>
+        <div id="place-history-list" class="history-list"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- THẺ TỌA ĐỘ KHI BẤM BẤT KỲ ĐIỂM NÀO TRÊN BẢN ĐỒ VỆ TINH -->
+  <div id="google-coord-card" class="google-coord-card google-elevation-3" style="display:none;">
+    <div class="coord-info">
+      <div class="coord-icon">📍</div>
+      <div>
+        <strong id="coord-latlng">20.89123, 104.68541</strong>
+        <p id="coord-address">Vị trí thực địa trên bản đồ vệ tinh · Phường Thảo Nguyên</p>
+      </div>
+    </div>
+    <div class="coord-actions">
+      <button type="button" class="google-btn btn-sm btn-primary" id="btn-coord-report">Gửi phản ánh tại đây</button>
+      <button type="button" class="google-btn btn-sm btn-neutral" id="btn-coord-permit">Cấp phép mới tại đây</button>
+      <button type="button" class="google-icon-btn btn-sm" id="btn-coord-close">✕</button>
+    </div>
+  </div>
+
+  <!-- BỘ CÔNG CỤ ĐIỀU KHIỂN BẢN ĐỒ GÓC PHẢI (GOOGLE MAP CONTROLS) -->
+  <div class="google-map-controls">
+    <!-- Nút Chuyển đổi Lớp Bản đồ (Layers FAB) -->
+    <div class="control-group">
+      <button type="button" class="google-control-btn" id="btn-layer-toggle" title="Lớp bản đồ (Vệ tinh / Giao thông / Ranh giới)">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="#3c4043">
+          <path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27-7.38 5.74zM12 16l7.36-5.73L21 9.07l-9-7-9 7 1.63 1.27L12 16z"/>
+        </svg>
+      </button>
+
+      <!-- Popup menu lớp bản đồ -->
+      <div id="google-layers-popup" class="google-layers-popup google-elevation-3" style="display:none;">
+        <div class="layers-title">Kiểu bản đồ</div>
+        <div class="layers-grid">
+          <button type="button" class="layer-item active" data-layer="satellite">
+            <div class="layer-thumb thumb-sat"></div>
+            <span>Vệ tinh Hybrid</span>
+          </button>
+          <button type="button" class="layer-item" data-layer="roadmap">
+            <div class="layer-thumb thumb-road"></div>
+            <span>Giao thông</span>
+          </button>
+          <button type="button" class="layer-item" data-layer="esri">
+            <div class="layer-thumb thumb-esri"></div>
+            <span>Ảnh Esri</span>
+          </button>
+        </div>
+        <div class="layers-divider"></div>
+        <div class="layers-title">Chi tiết bổ sung</div>
+        <label class="layer-checkbox">
+          <input type="checkbox" id="chk-boundary" checked>
+          <span>Vạch phân giới 4 xã (Thảo Nguyên 03982)</span>
+        </label>
+        <label class="layer-checkbox">
+          <input type="checkbox" id="chk-markers" checked>
+          <span>Ghim công trình xây dựng</span>
+        </label>
+        <label class="layer-checkbox">
+          <input type="checkbox" id="chk-complaints" checked>
+          <span>Vị trí phản ánh nhân dân</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Nút Khớp Ranh giới Toàn cảnh Phường Thảo Nguyên -->
+    <button type="button" class="google-control-btn" id="btn-fit-boundary" title="Toàn cảnh ranh giới Phường Thảo Nguyên (03982)">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="#0284c7">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+      </svg>
+    </button>
+
+    <!-- Nút Định vị GPS (My Location) -->
+    <button type="button" class="google-control-btn" id="btn-my-location" title="Vị trí của tôi (GPS thực địa)">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="#1a73e8">
+        <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
+      </svg>
+    </button>
+
+    <!-- Nút Thước đo khoảng cách / diện tích trắc địa -->
+    <button type="button" class="google-control-btn" id="btn-measure" title="Thước đo khoảng cách và diện tích">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="#3c4043">
+        <path d="M19.5 3h-15C3.12 3 2 4.12 2 5.5v13C2 19.88 3.12 21 4.5 21h15c1.38 0 2.5-1.12 2.5-2.5v-13C22 4.12 20.88 3 19.5 3zM4 7h2v2H4V7zm0 4h3v2H4v-2zm0 4h2v2H4v-2zm16 4H9v-2h2v-2H9v-2h3v-2H9V7h11v12z"/>
+      </svg>
+    </button>
+
+    <!-- Hộp Zoom `+` / `-` -->
+    <div class="control-zoom-group">
+      <button type="button" class="google-control-btn btn-zoom" id="btn-zoom-in" title="Phóng to">+</button>
+      <div class="zoom-divider"></div>
+      <button type="button" class="google-control-btn btn-zoom" id="btn-zoom-out" title="Thu nhỏ">−</button>
+    </div>
+  </div>
+
+  <!-- NÚT HÀNH ĐỘNG CHÍNH GOOGLE FAB (GÓC DƯỚI PHẢI) -->
+  <button type="button" class="google-primary-fab google-elevation-3" id="google-main-fab" aria-label="Thêm phản ánh hoặc cấp phép">
+    <svg viewBox="0 0 24 24" width="26" height="26" fill="#ffffff">
+      <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+    </svg>
+    <span class="fab-label" id="fab-label">Phản ánh</span>
+  </button>
+
+  <!-- THANH CÔNG CỤ ĐO TRẮC ĐỊA NỔI (KHI KÍCH HOẠT THƯỚC ĐO) -->
+  <div id="measure-panel" class="google-measure-panel google-elevation-3" style="display:none;">
+    <div class="measure-header">
+      <div class="measure-title-wrap">
+        <span class="measure-icon">📐</span>
+        <strong>Thước đo hiện trường</strong>
+      </div>
+      <button type="button" class="google-icon-btn btn-sm" id="btn-measure-close" title="Đóng thước đo">✕</button>
+    </div>
+    <div class="measure-options">
+      <button type="button" class="measure-chip active" id="btn-measure-dist" title="Đo chiều dài, khoảng lùi">Khoảng cách (m)</button>
+      <button type="button" class="measure-chip" id="btn-measure-area" title="Đo diện tích xây dựng">Diện tích (m²)</button>
+      <button type="button" class="measure-chip btn-undo" id="btn-measure-undo" title="Hoàn tác điểm đo trước">↩ Hoàn tác</button>
+      <button type="button" class="measure-chip btn-clear" id="btn-measure-clear" title="Xóa toàn bộ điểm đo">Xóa</button>
+    </div>
+    <div class="measure-result" id="measure-result">
+      Chấm các điểm trên ảnh vệ tinh để bắt đầu đo...
+    </div>
+    <div class="measure-actions">
+      <button type="button" class="google-btn btn-sm btn-primary" id="btn-measure-save-inspect" data-access="inspect" hidden title="Gán số đo thực tế vào phiếu kiểm tra công trình đang chọn">
+        📋 Lưu vào kiểm tra
+      </button>
+      <button type="button" class="google-btn btn-sm btn-neutral" id="btn-measure-save" title="Lưu số đo vào sổ nhật ký đo">
+        💾 Lưu số đo
+      </button>
+    </div>
+    <!-- Nhật ký đo đã lưu -->
+    <div id="measure-saved-list" class="measure-saved-list" style="display:none;">
+      <div class="saved-list-header">
+        <span>Nhật ký đo đã lưu</span>
+        <button type="button" class="btn-text-clear" id="btn-clear-saved-measures">Xóa hết</button>
+      </div>
+      <div id="saved-measures-items" class="saved-measures-items"></div>
+    </div>
+  </div>
+
+  <!-- NGĂN KÉO ĐIỀU HƯỚNG GOOGLE SIDE DRAWER (KHI BẤM MENU HAMBURGER) -->
+  <nav id="google-drawer" class="google-drawer google-elevation-3" aria-label="Menu quản lý nghiệp vụ">
+    <div class="drawer-header">
+      <div class="drawer-brand">
+        <div class="drawer-logo">TN</div>
+        <div>
+          <h3>PHƯỜNG THẢO NGUYÊN</h3>
+          <p>Quản lý Trật tự Xây dựng · Sơn La</p>
+        </div>
+      </div>
+      <button type="button" class="google-icon-btn" id="btn-drawer-close" aria-label="Đóng menu">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+          <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="drawer-items">
+      <button type="button" class="drawer-item" data-nav="list"><span class="drawer-icon">☷</span><span class="drawer-text">Danh sách công trình</span></button>
+      <button type="button" class="drawer-item" data-nav="sendComplaint"><span class="drawer-icon">📍</span><span class="drawer-text">Gửi phản ánh</span></button>
+      <button type="button" class="drawer-item" data-nav="lookup"><span class="drawer-icon">🔎</span><span class="drawer-text">Tra cứu phản ánh bằng mã bí mật</span></button>
+      <button type="button" class="drawer-item active" data-nav="map">
+        <span class="drawer-icon">🗺️</span>
+        <span class="drawer-text">Bản đồ công trình</span>
+      </button>
+
+      <button type="button" class="drawer-item" data-nav="tasks" data-access="staff" hidden>
+        <span class="drawer-icon">📋</span>
+        <span class="drawer-text">Việc cần xử lý (4 Mốc)</span>
+        <span class="drawer-badge" id="badge-tasks">0</span>
+      </button>
+
+      <button type="button" class="drawer-item" data-nav="complaints" data-access="staff" hidden>
+        <span class="drawer-icon">📣</span>
+        <span class="drawer-text">Xử lý Phản ánh Người dân</span>
+        <span class="drawer-badge badge-amber" id="badge-complaints">0</span>
+      </button>
+
+      <button type="button" class="drawer-item" data-nav="violations" data-access="staff" hidden>
+        <span class="drawer-icon">⚖️</span>
+        <span class="drawer-text">Biên bản Vi phạm (NĐ 16/2022)</span>
+        <span class="drawer-badge badge-red" id="badge-violations">0</span>
+      </button>
+
+      <button type="button" class="drawer-item" data-nav="reports" data-access="staff" hidden>
+        <span class="drawer-icon">📊</span>
+        <span class="drawer-text">Thống kê địa bàn</span>
+      </button>
+
+      <div class="drawer-divider"></div>
+      <div class="drawer-section-title" data-access="approve" hidden>QUẢN TRỊ DỮ LIỆU</div>
+
+      <button type="button" class="drawer-item" data-nav="newPermit" data-access="approve" hidden>
+        <span class="drawer-icon">➕</span>
+        <span class="drawer-text">Nhập giấy phép đã cấp</span>
+      </button>
+
+      <button type="button" class="drawer-item" data-nav="batch" data-access="approve" hidden>
+        <span class="drawer-icon">📥</span>
+        <span class="drawer-text">Nhập danh sách GPXD (CSV)</span>
+      </button>
+
+      <button type="button" class="drawer-item" data-nav="settings" data-access="admin" hidden>
+        <span class="drawer-icon">🛡️</span>
+        <span class="drawer-text">Nhật ký kiểm toán</span>
+      </button>
+    </div>
+
+    <div class="drawer-footer">
+      <span>QLTTXD Phường Thảo Nguyên · Bản thử nghiệm</span>
+      <small>Dữ liệu thời gian thực · WGS-84</small>
+    </div>
+  </nav>
+
+  <!-- KHUNG MÀN HÌNH CHỨC NĂNG NỔI (GOOGLE MATERIAL SURFACE MODAL) -->
+  <div id="google-surface-modal" class="google-surface-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="surface-title">
+    <div class="surface-container google-elevation-3">
+      <div class="surface-topbar">
+        <button type="button" class="google-icon-btn" id="btn-surface-back" aria-label="Quay lại bản đồ">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+          </svg>
+        </button>
+        <h2 id="surface-title" class="surface-title">Tiêu đề nghiệp vụ</h2>
+        <button type="button" class="google-icon-btn" id="btn-surface-close" aria-label="Đóng cửa sổ">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+          </svg>
+        </button>
+      </div>
+      <div class="surface-body" id="surface-body">
+        <!-- Dynamic content for Forms, Tables, Reports -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="/app.js"></script>
+</body>
+</html>

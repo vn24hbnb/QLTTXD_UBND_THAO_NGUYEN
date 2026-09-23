@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="96" fill="#0284c7"/>
+  <!-- Biểu tượng kiến trúc xây dựng và GIS -->
+  <path d="M256 70 L96 170 L96 440 L416 440 L416 170 Z" fill="#0369a1" opacity="0.4"/>
+  <!-- Tòa nhà và thước đo mốc -->
+  <rect x="160" y="210" width="192" height="230" rx="12" fill="#ffffff"/>
+  <!-- Cửa sổ công trình -->
+  <rect x="186" y="240" width="44" height="44" rx="6" fill="#0284c7"/>
+  <rect x="282" y="240" width="44" height="44" rx="6" fill="#0284c7"/>
+  <rect x="186" y="310" width="44" height="44" rx="6" fill="#0284c7"/>
+  <rect x="282" y="310" width="44" height="44" rx="6" fill="#0284c7"/>
+  <!-- Cửa chính -->
+  <path d="M232 440 L232 386 Q232 376 242 376 L270 376 Q280 376 280 386 L280 440 Z" fill="#0369a1"/>
+  <!-- Đỉnh mái -->
+  <polygon points="256,120 136,210 376,210" fill="#f59e0b"/>
+  <!-- Chữ TN -->
+  <text x="256" y="490" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="34" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="4">THẢO NGUYÊN</text>
+</svg>
