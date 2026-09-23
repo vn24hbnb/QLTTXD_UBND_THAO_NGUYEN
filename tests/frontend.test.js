@@ -81,12 +81,12 @@ test('frontend defaults to public and staff role comes only from login/session, 
   const h=harness(async req=>req.url.endsWith('/login')?{success:true,user:{...officer,role:'coordinator'}}:{success:true,data:[permit]});
   assert.equal(h.ui.state.role,'citizen');
   assert.doesNotMatch(app,/admin123456|tracking_code|TN-DEMO-7K4P/);
-  h.ui.showLoginForm();h.el('login-username').value='canbo';h.el('login-password').value='test-only-password';h.el('login-totp').value='123456';
+  h.ui.showLoginForm();assert.equal(h.el('login-totp').hidden,true);h.el('login-username').value='canbo';h.el('login-password').value='test-only-password';
   await h.trigger('form-login','submit');
   assert.equal(h.ui.state.role,'coordinator');
   assert.equal(h.el('btn-login').hidden,true);
   const body=JSON.parse(h.requests.find(r=>r.url.endsWith('/login')).body);
-  assert.equal(body.totp_token,'123456');
+  assert.equal(body.totp_token,undefined);
   assert.equal(h.ui.state.permits[0].place,'Tổ 8');assert.equal(h.ui.state.permits[0].done,2);
 });
 
@@ -94,6 +94,9 @@ test('frontend keeps anonymous state when login rejects TOTP',async()=>{
   const h=harness(async()=>({response:{ok:false,status:401,json:async()=>({success:false,requireTotp:true,error:'Cần mã TOTP'})}}));
   h.ui.showLoginForm();h.el('login-username').value='canbo';h.el('login-password').value='test-only-password';
   await h.trigger('form-login','submit');assert.equal(h.ui.state.role,'citizen');assert.equal(h.el('login-error').textContent,'Cần mã TOTP');
+  assert.equal(h.el('login-totp-label').hidden,false);assert.equal(h.el('login-totp').hidden,false);
+  h.el('login-totp').value='123456';await h.trigger('form-login','submit');
+  assert.equal(JSON.parse(h.requests.at(-1).body).totp_token,'123456');
 });
 
 test('frontend logout clears private DOM, memory, and user-scoped drafts',async()=>{

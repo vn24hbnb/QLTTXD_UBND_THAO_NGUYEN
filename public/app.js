@@ -142,7 +142,7 @@
     openSurfaceModal('Đăng nhập cán bộ', `<form id="form-login" class="app-form">
       <label for="login-username">Tên đăng nhập</label><input id="login-username" autocomplete="username" required>
       <label for="login-password">Mật khẩu</label><input type="password" id="login-password" autocomplete="current-password" required>
-      <label for="login-totp">Mã xác thực 6 số (nếu tài khoản đã bật)</label><input id="login-totp" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code">
+      <label id="login-totp-label" for="login-totp" hidden>Mã xác thực 6 số</label><input id="login-totp" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" hidden>
       <p id="login-error" class="form-error" role="alert"></p><button type="submit" class="google-btn btn-primary">Đăng nhập</button>
     </form>`);
     q('#form-login').addEventListener('submit', async event => {
@@ -158,7 +158,11 @@
         showToast('Đã đăng nhập cán bộ.');
       } catch (error) {
         q('#login-error').textContent = error.message;
-        if (error.requireTotp) q('#login-totp').focus();
+        if (error.requireTotp) {
+          q('#login-totp-label').hidden = false;
+          q('#login-totp').hidden = false;
+          q('#login-totp').focus();
+        }
       } finally { delete form.dataset.busy; }
     });
   }
