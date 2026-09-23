@@ -231,6 +231,7 @@
       wheelDebounceTime: 40,
       zoomAnimation: true,
       scrollWheelZoom: true,
+      doubleClickZoom: false,
       zoomControl: false,      // Dùng bộ điều khiển nổi chuẩn Google
       attributionControl: true,
       maxZoom: 20,
@@ -275,8 +276,9 @@
     complaintsLayerGroup = L.layerGroup().addTo(map);
     state.measureLayer = L.layerGroup().addTo(map);
 
-    // Sự kiện Click bản đồ: Xem tọa độ hoặc Chấm điểm đo đạc
+    // Chọn điểm phản ánh bằng nhấp đúp; click đơn chỉ dùng để đo khi bật thước.
     map.on('click', handleMapClick);
+    map.on('dblclick', handleMapDoubleClick);
 
     // Nạp dữ liệu ranh giới và công trình
     loadGeoBoundary();
@@ -506,42 +508,126 @@
 
   // --- SỰ KIỆN CLICK BẢN ĐỒ (XEM TỌA ĐỘ / THƯỚC ĐO) ---
   function handleMapClick(e) {
-    const lat = e.latlng.lat;
-    const lng = e.latlng.lng;
+    // Leaflet phát hai sự kiện click trước một double click. Bỏ qua click thứ hai.
+    if (e.originalEvent && e.originalEvent.detail > 1) return;
 
-    // 1. Chế độ Thước đo đang bật: Thêm điểm đo
     if (state.measureMode) {
-      addMeasurePoint([lat, lng]);
-      return;
+      addMeasurePoint([e.latlng.lat, e.latlng.lng]);
     }
+  }
 
-    // 2. Chế độ bình thường: Hiển thị Thẻ Tọa độ Google
+  function handleMapDoubleClick(e) {
+    // Khi đo đạc, click đơn đặt đỉnh và double click không chọn điểm phản ánh.
+    if (state.measureMode) return;
+
+    const { lat, lng } = e.latlng;
     const coordCard = q('#google-coord-card');
     q('#coord-latlng').textContent = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-    q('#coord-address').textContent = `Vị trí thực địa vệ tinh · Phường Thảo Nguyên`;
-
+    q('#coord-address').textContent = 'Đã chọn điểm phản ánh · Phường Thảo Nguyên';
     coordCard.style.display = 'flex';
-
-    // Lưu tọa độ đang chấm
     coordCard.dataset.lat = lat;
     coordCard.dataset.lng = lng;
+
+    q('#google-place-card').style.display = 'none';
+    state.selectedPermit = null;
+    showToast('Đã chọn vị trí. Bấm “Gửi phản ánh tại đây” để tiếp tục.');
   }
 
   // --- THƯỚC ĐO TRẮC ĐỊA TRÊN ẢNH VỆ TINH ---
-  function toggleMeasure() {
+  function setMeasureMode(mode) {
     const panel = q('#measure-panel');
     if (panel.style.display === 'none' || !panel.style.display) {
-      panel.style.display = 'block';
-      state.measureMode = 'dist';
+      panel.style.display = 'flex';
       state.measurePoints = [];
-      q('#btn-measure-dist').classList.add('active');
-      q('#btn-measure-area').classList.remove('active');
-      q('#measure-result').textContent = 'Chạm các điểm trên ảnh vệ tinh để đo khoảng cách...';
+      if (state.measureLayer) state.measureLayer.clearLayers();
       renderSavedMeasuresList();
       const mapEl = q('#map');
       if (mapEl) mapEl.classList.add('measuring-active');
-    } else {
+    }
+
+    state.measureMode = mode;
+    q('#btn-measure-dist').classList.toggle('active', mode === 'dist');
+    q('#btn-measure-area').classList.toggle('active', mode === 'area');
+    calculateMeasureResult();
+  }
+
+  function toggleMeasure() {
+    const panel = q('#measure-panel');
+    if (panel.style.display !== 'none' && panel.style.display) {
       closeMeasure();
+    } else {
+      setMeasureMode('dist');
+    }
+  }
+
+  function isTextEntryTarget(target) {
+    return target instanceof HTMLElement && (
+      target.isContentEditable ||
+      /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)
+    );
+  }
+
+  function handleEscapeKey() {
+    const surfaceModal = q('#google-surface-modal');
+    if (surfaceModal.style.display !== 'none' && surfaceModal.style.display) {
+      closeSurfaceModal();
+      return;
+    }
+
+    const measurePanel = q('#measure-panel');
+    if (measurePanel.style.display !== 'none' && measurePanel.style.display) {
+      closeMeasure();
+      return;
+    }
+
+    const drawer = q('#google-drawer');
+    if (drawer.classList.contains('open')) {
+      drawer.classList.remove('open');
+      q('#google-scrim').classList.remove('active');
+      return;
+    }
+
+    const accountPopup = q('#google-account-popup');
+    if (accountPopup.classList.contains('show')) {
+      accountPopup.classList.remove('show');
+      return;
+    }
+
+    const layersPopup = q('#google-layers-popup');
+    if (layersPopup.style.display !== 'none' && layersPopup.style.display) {
+      layersPopup.style.display = 'none';
+      return;
+    }
+
+    const coordCard = q('#google-coord-card');
+    if (coordCard.style.display !== 'none' && coordCard.style.display) {
+      coordCard.style.display = 'none';
+      return;
+    }
+
+    const placeCard = q('#google-place-card');
+    if (placeCard.style.display !== 'none' && placeCard.style.display) {
+      placeCard.style.display = 'none';
+      state.selectedPermit = null;
+    }
+  }
+
+  function handleKeyboardShortcuts(event) {
+    if (event.key === 'Escape') {
+      handleEscapeKey();
+      return;
+    }
+
+    if (!event.metaKey && !event.ctrlKey) return;
+    if (event.altKey || event.shiftKey || isTextEntryTarget(event.target)) return;
+
+    const key = event.key.toLowerCase();
+    if (key === 'd') {
+      event.preventDefault();
+      setMeasureMode('dist');
+    } else if (key === 'a') {
+      event.preventDefault();
+      setMeasureMode('area');
     }
   }
 
@@ -1253,7 +1339,7 @@
       });
     });
 
-    document.addEventListener('keydown', event => { if(event.key === 'Escape') { q('#google-drawer').classList.remove('open'); q('#google-account-popup').classList.remove('show'); closeSurfaceModal(); } });
+    document.addEventListener('keydown', handleKeyboardShortcuts);
 
     // 12. Nút đóng Surface Modal
     q('#btn-surface-close').addEventListener('click', closeSurfaceModal);
@@ -1261,18 +1347,8 @@
 
     // 13. Thước đo
     q('#btn-measure-close').addEventListener('click', closeMeasure);
-    q('#btn-measure-dist').addEventListener('click', () => {
-      state.measureMode = 'dist';
-      q('#btn-measure-dist').classList.add('active');
-      q('#btn-measure-area').classList.remove('active');
-      calculateMeasureResult();
-    });
-    q('#btn-measure-area').addEventListener('click', () => {
-      state.measureMode = 'area';
-      q('#btn-measure-area').classList.add('active');
-      q('#btn-measure-dist').classList.remove('active');
-      calculateMeasureResult();
-    });
+    q('#btn-measure-dist').addEventListener('click', () => setMeasureMode('dist'));
+    q('#btn-measure-area').addEventListener('click', () => setMeasureMode('area'));
     q('#btn-measure-undo').addEventListener('click', undoMeasurePoint);
     q('#btn-measure-clear').addEventListener('click', clearMeasurePoints);
     q('#btn-measure-save').addEventListener('click', saveCurrentMeasurement);
