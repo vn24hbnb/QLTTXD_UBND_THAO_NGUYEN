@@ -110,6 +110,7 @@
     </div>
     <div class="account-divider"></div>
     <div class="account-role-options">
+      <button type="button" id="btn-my-complaints-account" class="account-role-item" data-access="guest"><span class="role-icon">📝</span><span class="role-desc"><strong>Kiến nghị của tôi</strong><small>Xem tiến độ các phản ánh đã gửi</small></span></button>
       <button type="button" id="btn-login" class="account-role-item"><span class="role-icon">🏛️</span><span class="role-desc"><strong>Đăng nhập cán bộ</strong><small>Dùng tài khoản do đơn vị cấp</small></span></button>
       <button type="button" id="btn-logout" class="account-role-item" hidden><span class="role-icon">↪</span><strong>Đăng xuất</strong></button>
     </div>
@@ -193,7 +194,7 @@
       <!-- BẢNG CHỈ TIÊU KỸ THUẬT CÔNG TRÌNH -->
       <div class="place-section">
         <div class="section-heading">
-          <strong>Thông số kỹ thuật cấp phép</strong>
+          <strong id="place-tech-heading">Giấy phép xây dựng · thông tin rút gọn</strong>
         </div>
         <div class="tech-specs-grid" id="place-tech-specs">
           <!-- Rendered dynamically -->
@@ -367,6 +368,7 @@
     <div class="drawer-items">
       <button type="button" class="drawer-item" data-nav="list"><span class="drawer-icon">☷</span><span class="drawer-text">Danh sách công trình</span></button>
       <button type="button" class="drawer-item" data-nav="sendComplaint"><span class="drawer-icon">📍</span><span class="drawer-text">Gửi phản ánh</span></button>
+      <button type="button" class="drawer-item" data-nav="myComplaints"><span class="drawer-icon">📝</span><span class="drawer-text">Kiến nghị của tôi</span></button>
       <button type="button" class="drawer-item" data-nav="lookup"><span class="drawer-icon">🔎</span><span class="drawer-text">Tra cứu phản ánh bằng mã bí mật</span></button>
       <button type="button" class="drawer-item active" data-nav="map">
         <span class="drawer-icon">🗺️</span>

@@ -1652,6 +1652,18 @@ path:focus-visible {
 .record-row { padding: 14px; border: 1px solid #dadce0; border-radius: 10px; margin: 12px 0; overflow-wrap: anywhere; }
 .record-row p { margin: 8px 0; white-space: pre-wrap; }
 .record-row .google-btn { margin: 4px 4px 0 0; }
+.citizen-permit-note { margin: 0; color: #475569; font-size: 13px; line-height: 1.45; }
+.my-complaints-list { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+.my-complaint-card { padding: 14px; border: 1px solid #dbe3ed; border-radius: 12px; background: #f8fafc; overflow-wrap: anywhere; }
+.my-complaint-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.my-complaint-heading .google-badge { flex-shrink: 0; }
+.my-complaint-card p { margin: 8px 0; white-space: pre-wrap; }
+.my-complaint-location { color: #475569; font-size: 13px; }
+.my-complaint-card small { display: block; color: #64748b; margin: 10px 0; }
+.my-complaint-reply { padding: 10px 12px; border-radius: 8px; background: #ecfdf3; color: #166534; }
+.my-complaint-reply p { margin-bottom: 0; }
+.my-complaint-pending { color: #64748b; font-size: 13px; }
+.my-complaint-card .google-btn { margin-top: 8px; }
 .table-scroll { overflow-x: auto; }
 .app-table { border-collapse: collapse; width: 100%; font-size: 14px; }
 .app-table td, .app-table th { text-align: left; padding: 10px; border-bottom: 1px solid #dadce0; }
