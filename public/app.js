@@ -1091,53 +1091,100 @@
 
   function showNewPermitForm() {
     if (!canApprove()) return;
-    const fields = [['permit_number','Số giấy phép','text'],['issue_date','Ngày cấp','date'],['issuing_authority','Cơ quan cấp','text'],['owner_name','Chủ đầu tư / chủ hộ','text'],['site_address','Địa chỉ công trình','text'],['construction_type','Loại công trình','text']];
-    openSurfaceModal('Nhập giấy phép đã cấp', `<form id="form-permit" class="app-form"><p>Hồ sơ mới được lưu nội bộ. Người có quyền sẽ duyệt riêng trước khi công khai.</p>${fields.map(([name,label,type])=>`<label for="permit-${name}">${label} *</label><input id="permit-${name}" type="${type}" required>`).join('')}<div class="form-grid"><div><label for="permit-longitude">Kinh độ</label><input id="permit-longitude" type="number" step="any"></div><div><label for="permit-latitude">Vĩ độ</label><input id="permit-latitude" type="number" step="any"></div></div><label for="permit-building_area">Diện tích xây dựng (m²)</label><input id="permit-building_area" type="number" step="any" min="0"><label for="permit-floors_text">Số tầng theo giấy phép</label><input id="permit-floors_text"><label for="permit-setback_text">Khoảng lùi / chỉ giới theo giấy phép</label><input id="permit-setback_text"><p id="permit-error" class="form-error" role="alert"></p><button class="google-btn btn-primary">Lưu hồ sơ nội bộ</button></form>`);
-    q('#form-permit').addEventListener('submit', async event => {
+    const epoch = state.authEpoch;
+    const required = [['permit_number','Số giấy phép','text'],['issue_date','Ngày cấp','date'],['issuing_authority','Cơ quan cấp','text'],['owner_name','Chủ đầu tư / chủ hộ','text'],['site_address','Địa chỉ công trình','text'],['construction_type','Loại công trình','text']];
+    const optional = [['owner_address','Địa chỉ chủ đầu tư','text'],['land_lot','Thửa đất','text'],['land_use_cert','Giấy tờ đất','text'],['land_area','Diện tích đất (m²)','number'],['building_area','Diện tích xây dựng (m²)','number'],['total_floor_area','Tổng diện tích sàn (m²)','number'],['land_use_ratio','Hệ số sử dụng đất','number'],['floors_text','Số tầng theo giấy phép','text'],['confirmed_floors','Số tầng xác nhận','integer'],['basement_floors','Số tầng hầm','integer'],['mezzanine_floors','Số tầng lửng','integer'],['building_height','Chiều cao công trình (m)','number'],['building_density','Mật độ xây dựng (%)','number'],['setback_text','Khoảng lùi','text'],['red_line_setback','Chỉ giới đường đỏ','text'],['construction_boundary','Chỉ giới xây dựng','text'],['ground_elevation','Cốt nền','text'],['exterior_color','Màu sắc công trình','text'],['design_by','Đơn vị thiết kế','text'],['design_doc','Hồ sơ thiết kế','text'],['expiration_date','Ngày hết hạn','date']];
+    const fields = [...required, ...optional, ['longitude','Kinh độ','coordinate'], ['latitude','Vĩ độ','coordinate']];
+    const input = ([name,label,type], needed = false) => `<div><label for="permit-${name}">${label}${needed ? ' *' : ''}</label><input id="permit-${name}" type="${['integer','coordinate'].includes(type) ? 'number' : type}" ${needed ? 'required' : ''} ${['number','integer','coordinate'].includes(type) ? `step="${type === 'integer' ? '1' : 'any'}" ${type === 'coordinate' ? '' : 'min="0"'}` : ''}></div>`;
+    let key = uniqueKey('permit');
+    let submittedPayload = null;
+    openSurfaceModal('Nhập giấy phép đã cấp', `<form id="form-permit" class="app-form"><p>Hồ sơ mới được lưu nội bộ. Người có quyền sẽ duyệt riêng trước khi công khai.</p><div class="form-grid">${required.map(field=>input(field,true)).join('')}</div><h3>Chỉ tiêu theo giấy phép</h3><p>Chỉ nhập thông tin có trên hồ sơ; có thể để trống mục chưa xác định.</p><div class="form-grid">${optional.map(field=>input(field)).join('')}</div><h3>Vị trí công trình</h3><p>Nhập cả kinh độ và vĩ độ, hoặc để trống cả hai để bổ sung sau.</p><div class="form-grid">${fields.slice(-2).map(field=>input(field)).join('')}</div><p id="permit-error" class="form-error" role="alert"></p><button type="submit" class="google-btn btn-primary">Lưu hồ sơ nội bộ</button></form>`);
+    const form = q('#form-permit');
+    form.addEventListener('submit', async event => {
       event.preventDefault();
-      const form = event.currentTarget;
-      if (form.dataset.busy) return;
+      if (form.dataset.busy || epoch !== state.authEpoch || q('#form-permit') !== form) return;
       form.dataset.busy='1';
+      const button = form.querySelector('button[type="submit"]');
+      button.disabled = true;
+      if (!submittedPayload) submittedPayload = Object.fromEntries(fields.map(([name,,type]) => [name, ['number','integer','coordinate'].includes(type) ? nullableNumber(`#permit-${name}`) : q(`#permit-${name}`).value.trim()]));
+      form.querySelectorAll('input').forEach(input => { input.disabled = true; });
+      let saved = false;
       try {
-        const body = Object.fromEntries(fields.map(([name])=>[name,q(`#permit-${name}`).value.trim()]));
-        for(const name of ['longitude','latitude','building_area']) body[name]=nullableNumber(`#permit-${name}`);
-        for(const name of ['floors_text','setback_text']) body[name]=q(`#permit-${name}`).value.trim();
-        const result=await postJson('/api/internal/permits',body);
+        const result=await postJson('/api/internal/permits',submittedPayload,key);
         if(!result.data?.id) throw new Error('Chưa nhận được mã hồ sơ.');
+        saved = true;
+        if (epoch !== state.authEpoch || q('#form-permit') !== form) return;
         closeSurfaceModal();await fetchData();await selectPermit(normalizePermit(result.data));
-      }catch(error){q('#permit-error').textContent=error.message;}finally{delete form.dataset.busy;}
+      } catch(error) {
+        if (epoch !== state.authEpoch || q('#form-permit') !== form) return;
+        if (error.status && error.status < 500) {
+          submittedPayload = null; key = uniqueKey('permit');
+          form.querySelectorAll('input').forEach(input => { input.disabled = false; });
+        }
+        q('#permit-error').textContent = error.message + (submittedPayload && !saved ? ' Bấm lưu lại để kiểm tra cùng hồ sơ, tránh tạo bản trùng.' : '');
+      } finally { delete form.dataset.busy; button.disabled = false; }
     });
   }
 
   function showBatchForm() {
     if(!canApprove())return;
-    const key=uniqueKey('import');
-    let preview=null;
-    let filename='import.csv';
-    openSurfaceModal('Nhập danh sách giấy phép từ CSV', `<form id="form-batch" class="app-form"><p>Cột bắt buộc: số giấy phép, ngày cấp, cơ quan cấp, chủ hộ, địa điểm, loại công trình, kinh độ, vĩ độ. Hãy xem trước và sửa hết lỗi trước khi nhập.</p><label for="batch-file">Chọn tệp CSV UTF-8</label><input type="file" id="batch-file" accept=".csv,text/csv" required><button class="google-btn btn-neutral">Kiểm tra và xem trước</button></form><div id="batch-preview"></div><p id="batch-error" class="form-error" role="alert"></p><button id="batch-commit" class="google-btn btn-primary" hidden>Nhập các hồ sơ đã kiểm tra</button>`);
-    q('#form-batch').addEventListener('submit',async event=>{
-      event.preventDefault();preview=null;q('#batch-commit').hidden=true;
+    const epoch = state.authEpoch;
+    let preview = null;
+    let revision = 0;
+    let filename = 'import.csv';
+    let key = uniqueKey('import');
+    let submittedPayload = null;
+    let committing = false;
+    openSurfaceModal('Nhập danh sách giấy phép từ CSV', `<form id="form-batch" class="app-form"><p>Cột bắt buộc: số giấy phép, ngày cấp, cơ quan cấp, chủ hộ, địa điểm, loại công trình, kinh độ, vĩ độ. Hãy xem trước và sửa hết lỗi trước khi nhập.</p><p><a href="/mau-nhap-giay-phep.csv" download>Tải tệp CSV mẫu</a>. Hỗ trợ CSV UTF-8 dùng dấu phẩy, chấm phẩy hoặc tab; ngày dạng ngày/tháng/năm hoặc năm-tháng-ngày. Tệp Excel cần lưu thành CSV trước khi chọn.</p><label for="batch-file">Chọn tệp CSV UTF-8</label><input type="file" id="batch-file" accept=".csv,text/csv" required><button type="submit" class="google-btn btn-neutral">Kiểm tra và xem trước</button></form><div id="batch-preview"></div><p id="batch-error" class="form-error" role="alert"></p><button id="batch-commit" class="google-btn btn-primary" hidden>Nhập các hồ sơ đã kiểm tra</button>`);
+    const form = q('#form-batch');
+    const fileInput = q('#batch-file');
+    const previewButton = form.querySelector('button[type="submit"]');
+    const active = () => epoch === state.authEpoch && q('#form-batch') === form;
+    const invalidate = () => {
+      revision++; preview = null; key = uniqueKey('import');
+      q('#batch-commit').hidden = true;
+      q('#batch-preview').textContent = '';
+      q('#batch-error').textContent = '';
+    };
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();
+      if (!active() || committing || submittedPayload) return;
+      invalidate();
+      const current = revision;
+      const file = fileInput.files[0];
       try {
-        const file=q('#batch-file').files[0];if(!file || file.size>2*1024*1024)throw new Error('Chọn tệp CSV tối đa 2 MB.');
-        filename=file.name;
-        const result=await postJson('/api/internal/batch-import/preview',{csvText:await file.text()});
-        preview=result.data;
-        q('#batch-preview').innerHTML=`<p>${esc(preview.validCount)} dòng hợp lệ; ${esc(preview.errorCount)} dòng lỗi.</p><div class="table-scroll"><table class="app-table"><thead><tr><th>Dòng</th><th>Số giấy phép</th><th>Địa chỉ</th><th>Kết quả kiểm tra</th></tr></thead><tbody>${(preview.previewRows||[]).map(row=>`<tr><td>${esc(row.rowNumber)}</td><td>${esc(row.data?.permit_number)}</td><td>${esc(row.data?.site_address)}</td><td>${row.isValid?'Hợp lệ':esc((row.errors||[]).map(e=>e.message).join('; '))}</td></tr>`).join('')}</tbody></table></div>`;
+        if(!file || !/\.csv$/i.test(file.name) || file.size>2*1024*1024)throw new Error('Chọn tệp CSV tối đa 2 MB.');
+        q('#batch-error').textContent = 'Đang kiểm tra tệp…';
+        const csvText = await file.text();
+        if (!active() || current !== revision || fileInput.files[0] !== file) return;
+        const result=await postJson('/api/internal/batch-import/preview',{csvText});
+        if (!active() || current !== revision || fileInput.files[0] !== file) return;
+        preview=result.data; filename=file.name;
+        if (!preview || !Array.isArray(preview.previewRows)) throw new Error('Máy chủ chưa trả kết quả kiểm tra hợp lệ.');
+        q('#batch-preview').innerHTML=`<p>${esc(preview.validCount)} dòng hợp lệ; ${esc(preview.errorCount)} dòng lỗi.</p><div class="table-scroll"><table class="app-table"><thead><tr><th>Dòng</th><th>Số giấy phép</th><th>Địa chỉ</th><th>Kết quả kiểm tra</th></tr></thead><tbody>${preview.previewRows.map(row=>`<tr><td>${esc(row.rowNumber)}</td><td>${esc(row.data?.permit_number)}</td><td>${esc(row.data?.site_address)}</td><td>${row.isValid?'Hợp lệ':esc((row.errors||[]).map(e=>e.message).join('; '))}</td></tr>`).join('')}</tbody></table></div>`;
         q('#batch-commit').hidden=!(preview.validCount>0 && preview.errorCount===0);
-        q('#batch-error').textContent='';
-      }catch(error){q('#batch-error').textContent=error.message;}
+        q('#batch-error').textContent=preview.success === false ? (preview.errors || []).map(error=>error.message).join('; ') : '';
+      }catch(error){if (active() && current === revision) { preview=null;q('#batch-commit').hidden=true;q('#batch-error').textContent=error.message; }}
     });
-    q('#batch-file').addEventListener('change',()=>{preview=null;q('#batch-commit').hidden=true;q('#batch-preview').textContent='';});
+    fileInput.addEventListener('change',()=>{ if (active() && !committing && !submittedPayload) invalidate(); });
     q('#batch-commit').addEventListener('click',async event=>{
-      if(!preview || preview.errorCount || !preview.validCount)return;
+      if(!active() || committing || !preview || preview.errorCount || !preview.validCount)return;
       const button=event.currentTarget;
-      button.disabled=true;
+      committing = true;button.disabled=true;fileInput.disabled=true;previewButton.disabled=true;
+      submittedPayload ||= {validRows:preview.previewRows.map(row=>row.data),filename};
       try{
-        const result=await postJson('/api/internal/batch-import/commit',{validRows:preview.previewRows.map(row=>row.data),filename},key);
+        const result=await postJson('/api/internal/batch-import/commit',submittedPayload,key);
         if(!result.data?.batchId)throw new Error('Chưa nhận được mã lô nhập.');
+        if (!active()) return;
         closeSurfaceModal();await fetchData();showToast(`Đã nhập ${result.data.importedCount} hồ sơ nội bộ.`);
-      }catch(error){q('#batch-error').textContent=error.message;}
-      finally{button.disabled=false;}
+      }catch(error){
+        if (!active()) return;
+        if (error.status && error.status < 500) { submittedPayload = null; invalidate(); }
+        q('#batch-error').textContent=error.message + (submittedPayload ? ' Bấm nhập lại để xác nhận cùng lô hồ sơ, tránh nhập trùng.' : ' Hãy kiểm tra và xem trước lại tệp.');
+      }finally{
+        committing=false;button.disabled=false;
+        fileInput.disabled=Boolean(submittedPayload);previewButton.disabled=Boolean(submittedPayload);
+      }
     });
   }
 

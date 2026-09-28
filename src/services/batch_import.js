@@ -12,6 +12,20 @@ export function parseCsv(text) {
   // Xóa UTF-8 BOM nếu có
   const cleanText = text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text;
 
+  // Excel may export a semicolon-separated CSV in Vietnamese locales.
+  const separators = { ',': 0, ';': 0, '\t': 0 };
+  let quoted = false;
+  for (let i = 0; i < cleanText.length; i++) {
+    const c = cleanText[i];
+    if (c === '"') {
+      if (quoted && cleanText[i + 1] === '"') i++;
+      else quoted = !quoted;
+    } else if (!quoted) {
+      if (c === '\r' || c === '\n') break;
+      if (c in separators) separators[c]++;
+    }
+  }
+  const delimiter = Object.keys(separators).sort((a, b) => separators[b] - separators[a])[0];
   const rows = [];
   let currentRow = [];
   let currentVal = '';
@@ -28,7 +42,7 @@ export function parseCsv(text) {
       } else {
         inQuotes = !inQuotes;
       }
-    } else if (char === ',' && !inQuotes) {
+    } else if (char === delimiter && !inQuotes) {
       currentRow.push(currentVal.trim());
       currentVal = '';
     } else if ((char === '\r' || char === '\n') && !inQuotes) {
@@ -73,29 +87,29 @@ export function removeDiacritics(str) {
 /**
  * Ánh xạ tiêu đề cột tiếng Việt hoặc tiếng Anh sang tên trường chuẩn
  */
+const HEADER_ALIASES = {
+  permit_number: ['Số giấy phép', 'Số GPXD', 'permitnum'], issue_date: ['Ngày cấp'],
+  issuing_authority: ['Cơ quan cấp', 'Cơ quan cấp phép', 'authority'],
+  owner_name: ['Chủ hộ', 'Chủ đầu tư', 'Tên chủ đầu tư'],
+  owner_address: ['Địa chỉ chủ hộ', 'Địa chỉ chủ đầu tư'],
+  site_address: ['Địa điểm', 'Địa điểm xây dựng', 'Địa chỉ', 'Địa chỉ công trình'],
+  construction_type: ['Loại công trình', 'type'],
+  land_area: ['DT đất', 'Diện tích đất'], building_area: ['DT xây dựng', 'Diện tích xây dựng'],
+  total_floor_area: ['Tổng DT sàn', 'Tổng diện tích sàn', 'floorsarea', 'totalfloor'],
+  land_use_ratio: ['Hệ số sử dụng đất'], floors_text: ['Số tầng', 'Số tầng theo giấy phép', 'Quy mô tầng', 'floors'],
+  confirmed_floors: ['Số tầng xác nhận'], basement_floors: ['Số tầng hầm'], mezzanine_floors: ['Số tầng lửng'],
+  building_height: ['Chiều cao công trình', 'Chiều cao'], building_density: ['Mật độ xây dựng'],
+  setback_text: ['Khoảng lùi', 'setback'], red_line_setback: ['Chỉ giới đường đỏ'], construction_boundary: ['Chỉ giới xây dựng'],
+  ground_elevation: ['Cốt nền'], exterior_color: ['Màu sắc công trình', 'Màu sắc'], land_lot: ['Thửa đất'],
+  design_by: ['Đơn vị thiết kế'], design_doc: ['Hồ sơ thiết kế'], land_use_cert: ['Giấy tờ đất'],
+  expiration_date: ['Ngày hết hạn'], longitude: ['Kinh độ', 'lng'], latitude: ['Vĩ độ', 'lat'], commune_code: ['Mã địa bàn']
+};
+const headerKey = value => removeDiacritics(value).toLowerCase().replace(/\([^)]*\)/g, '').replace(/m[²2]/g, '').replace(/[\s_/%²-]/g, '');
+const HEADER_FIELDS = new Map(Object.entries(HEADER_ALIASES).flatMap(([field, aliases]) => [field, ...aliases].map(alias => [headerKey(alias), field])));
+const NUMERIC_FIELDS = ['land_area','building_area','total_floor_area','land_use_ratio','confirmed_floors','basement_floors','mezzanine_floors','building_height','building_density','longitude','latitude'];
 export function mapHeaderToField(header) {
-  const clean = removeDiacritics(header).toLowerCase().replace(/m²/gi, '').replace(/[\s_()/-]/g, '');
-
-
-  if (clean.includes('sogiayphep') || clean.includes('permitnum')) return 'permit_number';
-  if (clean.includes('ngaycap') || clean.includes('issuedate')) return 'issue_date';
-  if (clean.includes('coquancap') || clean.includes('authority')) return 'issuing_authority';
-  if (clean.includes('diachichuho') || clean.includes('diachichudautu') || clean.includes('owneraddress')) return 'owner_address';
-  if (clean.includes('chuho') || clean.includes('ownername') || clean.includes('chudautu')) return 'owner_name';
-  if (clean.includes('diadiem') || clean.includes('siteaddress') || clean.includes('diachi')) return 'site_address';
-  if (clean.includes('loaicongtrinh') || clean.includes('type')) return 'construction_type';
-  if (clean.includes('dtdat') || clean.includes('landarea')) return 'land_area';
-  if (clean.includes('dtxaydung') || clean.includes('buildingarea')) return 'building_area';
-  if (clean.includes('tongdtsan') || clean.includes('floorsarea') || clean.includes('totalfloor')) return 'total_floor_area';
-  if (clean.includes('confirmedfloors') || clean.includes('sotangxacnhan')) return 'confirmed_floors';
-  if (clean.includes('sotang') || clean.includes('floors')) return 'floors_text';
-  if (clean.includes('khoanglui') || clean.includes('setback')) return 'setback_text';
-  if (clean.includes('kinhdo') || clean.includes('lng') || clean.includes('longitude')) return 'longitude';
-  if (clean.includes('vido') || clean.includes('lat') || clean.includes('latitude')) return 'latitude';
-
-  return header;
+  return HEADER_FIELDS.get(headerKey(header)) || header;
 }
-
 
 /**
  * Chuẩn hóa định dạng ngày sang YYYY-MM-DD
@@ -130,6 +144,8 @@ export async function previewBatch(csvContent) {
   if (!headers.length || !rows.length) return {success:false,totalRows:0,validCount:0,errorCount:0,errors:[{row:1,field:'csv',message:'Tệp CSV trống'}],previewRows:[]};
   if (rows.length>1000) fail('Mỗi lô chỉ nhận tối đa 1.000 hồ sơ');
   const fields=headers.map(mapHeaderToField);
+  const unknown = headers.filter((header, i) => !Object.hasOwn(HEADER_ALIASES, fields[i]));
+  if (unknown.length) fail('Không nhận diện được cột: ' + unknown.join(', ') + '. Hãy dùng tệp mẫu.');
   if(new Set(fields).size!==fields.length) fail('Tệp có cột trùng hoặc nhiều cột cùng ý nghĩa');
   const existing=new Set((await dbService.all('SELECT permit_number FROM permits')).map(p=>p.permit_number.toUpperCase()));
   const seen=new Set();
@@ -139,6 +155,10 @@ export async function previewBatch(csvContent) {
     try {
       if(row.length!==fields.length) fail('Số ô không khớp tiêu đề CSV');
       data.issue_date=normalizeDate(data.issue_date);
+      data.expiration_date=normalizeDate(data.expiration_date);
+      for (const field of NUMERIC_FIELDS) {
+        if (typeof data[field] === 'string' && /^-?\d+,\d+$/.test(data[field])) data[field] = data[field].replace(',', '.');
+      }
       data=validatePermit(data);
       if(data.longitude==null) fail('Thiếu tọa độ công trình');
       const normalized=data.permit_number.toUpperCase();
