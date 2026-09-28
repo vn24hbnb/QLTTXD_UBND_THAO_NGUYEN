@@ -698,6 +698,9 @@ path:focus-visible {
   gap: 10px;
 }
 .coord-icon { font-size: 24px; }
+#google-map.picking-permit-coordinates,
+#google-map.picking-permit-coordinates .leaflet-container { cursor: crosshair; }
+.coordinate-summary { margin: 0; color: #1a73e8; font-size: 14px; font-weight: 600; }
 .coord-info strong {
   display: block;
   font-size: 14px;
@@ -1001,6 +1004,7 @@ path:focus-visible {
   font-size: 12px;
   white-space: nowrap;
 }
+.measure-actions #btn-permit-from-parcel { grid-column: 1 / -1; }
 
 /* Danh sách nhật ký đo */
 .measure-saved-list {

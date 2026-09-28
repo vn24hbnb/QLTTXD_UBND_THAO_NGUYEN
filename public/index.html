@@ -221,7 +221,7 @@
     </div>
     <div class="coord-actions">
       <button type="button" class="google-btn btn-sm btn-primary" id="btn-coord-report">Gửi phản ánh tại đây</button>
-      <button type="button" class="google-btn btn-sm btn-neutral" id="btn-coord-permit">Cấp phép mới tại đây</button>
+      <button type="button" class="google-btn btn-sm btn-neutral" id="btn-coord-permit" data-access="approve" hidden>Cấp phép mới tại đây</button>
       <button type="button" class="google-icon-btn btn-sm" id="btn-coord-close">✕</button>
     </div>
   </div>
@@ -332,6 +332,9 @@
       </button>
       <button type="button" class="google-btn btn-sm btn-neutral" id="btn-measure-save" title="Lưu số đo vào sổ nhật ký đo">
         💾 Lưu số đo
+      </button>
+      <button type="button" class="google-btn btn-sm btn-primary" id="btn-permit-from-parcel" data-access="approve" hidden title="Mở biểu mẫu và tự điền diện tích cùng tọa độ tâm khu đất đã vẽ">
+        🏠 Nhập giấy phép tại khu đất này
       </button>
     </div>
     <!-- Nhật ký đo đã lưu -->

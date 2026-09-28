@@ -30,6 +30,7 @@
     measurePoints: [],
     measureMarkers: [],
     measureLayer: null,
+    coordinatePicker: null,
     savedMeasurements: []
   };
 
@@ -106,6 +107,8 @@
     state.complaints = [];
     state.selectedPermit = null;
     state.activeInspection = null;
+    state.coordinatePicker = null;
+    q('#google-map')?.classList.remove('picking-permit-coordinates');
     state.offlineDrafts = [];
     q('#google-place-card').style.display = 'none';
     q('#place-tech-specs').innerHTML = '';
@@ -131,6 +134,8 @@
       const access = el.dataset.access;
       el.hidden = !(access === 'staff' ? isStaff() : access === 'inspect' ? canInspect() : access === 'approve' ? canApprove() : access === 'admin' ? state.role === 'admin' : false);
     });
+    const parcelPermitButton = q('#btn-permit-from-parcel');
+    if (parcelPermitButton) parcelPermitButton.hidden = !(canApprove() && state.measureMode === 'area' && state.measurePoints.length >= 3);
   }
 
   async function restoreSession() {
@@ -512,6 +517,7 @@
 
   // --- SỰ KIỆN CLICK BẢN ĐỒ (XEM TỌA ĐỘ / THƯỚC ĐO) ---
   function handleMapClick(e) {
+    if (state.coordinatePicker) return;
     // Leaflet phát hai sự kiện click trước một double click. Bỏ qua click thứ hai.
     if (e.originalEvent && e.originalEvent.detail > 1) return;
 
@@ -521,6 +527,20 @@
   }
 
   function handleMapDoubleClick(e) {
+    if (state.coordinatePicker) {
+      const { form } = state.coordinatePicker;
+      state.coordinatePicker = null;
+      q('#google-map').classList.remove('picking-permit-coordinates');
+      form.querySelector('#permit-longitude').value = e.latlng.lng.toFixed(6);
+      form.querySelector('#permit-latitude').value = e.latlng.lat.toFixed(6);
+      const summary = form.querySelector('#permit-coordinate-summary');
+      if (summary) summary.textContent = `Đã chọn: ${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}`;
+      q('#google-surface-modal').style.display = 'flex';
+      q('#google-scrim').classList.add('active');
+      showToast('Đã cập nhật tọa độ từ bản đồ.');
+      return;
+    }
+
     // Khi đo đạc, click đơn đặt đỉnh và double click không chọn điểm phản ánh.
     if (state.measureMode) return;
 
@@ -534,7 +554,7 @@
 
     q('#google-place-card').style.display = 'none';
     state.selectedPermit = null;
-    showToast('Đã chọn vị trí. Bấm “Gửi phản ánh tại đây” để tiếp tục.');
+    showToast('Đã chọn vị trí. Có thể gửi phản ánh hoặc nhập giấy phép tại đây.');
   }
 
   // --- THƯỚC ĐO TRẮC ĐỊA TRÊN ẢNH VỆ TINH ---
@@ -572,6 +592,15 @@
   }
 
   function handleEscapeKey() {
+    if (state.coordinatePicker) {
+      state.coordinatePicker = null;
+      q('#google-map').classList.remove('picking-permit-coordinates');
+      q('#google-surface-modal').style.display = 'flex';
+      q('#google-scrim').classList.add('active');
+      showToast('Đã hủy chọn tọa độ.');
+      return;
+    }
+
     const surfaceModal = q('#google-surface-modal');
     if (surfaceModal.style.display !== 'none' && surfaceModal.style.display) {
       closeSurfaceModal();
@@ -715,6 +744,8 @@
     const pts = state.measurePoints;
     const n = pts.length;
     const out = q('#measure-result');
+    const parcelPermitButton = q('#btn-permit-from-parcel');
+    if (parcelPermitButton) parcelPermitButton.hidden = !(canApprove() && state.measureMode === 'area' && n >= 3);
 
     if (state.measureMode === 'dist') {
       if (n < 2) {
@@ -810,6 +841,43 @@
 
     renderSavedMeasuresList();
     showToast(`💾 Đã lưu số đo: ${val} ${unit}`);
+  }
+
+  function getParcelDetails(points) {
+    const n = points.length;
+    const radius = 6378137;
+    let twiceArea = 0;
+    let centerX = 0;
+    let centerY = 0;
+    const referenceLatitude = points.reduce((sum, point) => sum + point[0], 0) / n;
+    const longitudeScale = Math.cos(referenceLatitude * Math.PI / 180);
+    const projected = points.map(([latitude, longitude]) => [longitude * longitudeScale, latitude]);
+    for (let i = 0; i < n; i++) {
+      const [x1, y1] = projected[i];
+      const [x2, y2] = projected[(i + 1) % n];
+      const cross = x1 * y2 - x2 * y1;
+      twiceArea += cross;
+      centerX += (x1 + x2) * cross;
+      centerY += (y1 + y2) * cross;
+    }
+    const areaM2 = Math.abs(twiceArea) * (Math.PI / 180 * radius) ** 2 * longitudeScale / 2;
+    if (Math.abs(twiceArea) < 1e-12) {
+      return {
+        land_area: Math.round(areaM2),
+        longitude: points.reduce((sum, point) => sum + point[1], 0) / n,
+        latitude: referenceLatitude
+      };
+    }
+    return {
+      land_area: Math.round(areaM2),
+      longitude: longitudeScale ? centerX / (3 * twiceArea) / longitudeScale : points[0][1],
+      latitude: centerY / (3 * twiceArea)
+    };
+  }
+
+  function showPermitFormFromParcel() {
+    if (!canApprove() || state.measureMode !== 'area' || state.measurePoints.length < 3) return;
+    showNewPermitForm(getParcelDetails(state.measurePoints), { fromParcel: true });
   }
 
   function saveMeasurementToInspection() {
@@ -1089,7 +1157,7 @@
     });
   }
 
-  function showNewPermitForm() {
+  function showNewPermitForm(prefill = {}, options = {}) {
     if (!canApprove()) return;
     const epoch = state.authEpoch;
     const required = [['permit_number','Số giấy phép','text'],['issue_date','Ngày cấp','date'],['issuing_authority','Cơ quan cấp','text'],['owner_name','Chủ đầu tư / chủ hộ','text'],['site_address','Địa chỉ công trình','text'],['construction_type','Loại công trình','text']];
@@ -1098,8 +1166,19 @@
     const input = ([name,label,type], needed = false) => `<div><label for="permit-${name}">${label}${needed ? ' *' : ''}</label><input id="permit-${name}" type="${['integer','coordinate'].includes(type) ? 'number' : type}" ${needed ? 'required' : ''} ${['number','integer','coordinate'].includes(type) ? `step="${type === 'integer' ? '1' : 'any'}" ${type === 'coordinate' ? '' : 'min="0"'}` : ''}></div>`;
     let key = uniqueKey('permit');
     let submittedPayload = null;
-    openSurfaceModal('Nhập giấy phép đã cấp', `<form id="form-permit" class="app-form"><p>Hồ sơ mới được lưu nội bộ. Người có quyền sẽ duyệt riêng trước khi công khai.</p><div class="form-grid">${required.map(field=>input(field,true)).join('')}</div><h3>Chỉ tiêu theo giấy phép</h3><p>Chỉ nhập thông tin có trên hồ sơ; có thể để trống mục chưa xác định.</p><div class="form-grid">${optional.map(field=>input(field)).join('')}</div><h3>Vị trí công trình</h3><p>Nhập cả kinh độ và vĩ độ, hoặc để trống cả hai để bổ sung sau.</p><div class="form-grid">${fields.slice(-2).map(field=>input(field)).join('')}</div><p id="permit-error" class="form-error" role="alert"></p><button type="submit" class="google-btn btn-primary">Lưu hồ sơ nội bộ</button></form>`);
+    openSurfaceModal('Nhập giấy phép đã cấp', `<form id="form-permit" class="app-form"><p>Hồ sơ mới được lưu nội bộ. Người có quyền sẽ duyệt riêng trước khi công khai.</p><div class="form-grid">${required.map(field=>input(field,true)).join('')}</div><h3>Chỉ tiêu theo giấy phép</h3><p>Chỉ nhập thông tin có trên hồ sơ; có thể để trống mục chưa xác định.</p><div class="form-grid">${optional.map(field=>input(field)).join('')}</div><h3>Vị trí công trình</h3><p>Chọn điểm trên bản đồ hoặc nhập kinh độ, vĩ độ. Nếu vừa vẽ khu đất, tọa độ tâm và diện tích ước tính sẽ được điền sẵn; vui lòng đối chiếu giấy phép trước khi lưu.</p><div class="form-grid">${fields.slice(-2).map(field=>input(field)).join('')}</div><button type="button" id="permit-pick-coordinate" class="google-btn btn-neutral">📍 Chọn tọa độ trên bản đồ</button><p id="permit-coordinate-summary" class="coordinate-summary">${prefill.latitude != null && prefill.longitude != null ? `Tọa độ đã chọn: ${Number(prefill.latitude).toFixed(6)}, ${Number(prefill.longitude).toFixed(6)}` : 'Chưa chọn tọa độ trên bản đồ.'}</p><p id="permit-error" class="form-error" role="alert"></p><button type="submit" class="google-btn btn-primary">Lưu hồ sơ nội bộ</button></form>`);
     const form = q('#form-permit');
+    for (const name of ['longitude', 'latitude', 'land_area']) {
+      if (prefill[name] != null && Number.isFinite(Number(prefill[name]))) form.querySelector(`#permit-${name}`).value = String(prefill[name]);
+    }
+    q('#permit-pick-coordinate').addEventListener('click', () => {
+      state.coordinatePicker = { form };
+      q('#google-surface-modal').style.display = 'none';
+      q('#google-scrim').classList.remove('active');
+      q('#google-coord-card').style.display = 'none';
+      q('#google-map').classList.add('picking-permit-coordinates');
+      showToast('Nhấp đúp vào vị trí công trình trên bản đồ. Nhấn Esc để hủy.');
+    });
     form.addEventListener('submit', async event => {
       event.preventDefault();
       if (form.dataset.busy || epoch !== state.authEpoch || q('#form-permit') !== form) return;
@@ -1114,6 +1193,7 @@
         if(!result.data?.id) throw new Error('Chưa nhận được mã hồ sơ.');
         saved = true;
         if (epoch !== state.authEpoch || q('#form-permit') !== form) return;
+        if (options.fromParcel) closeMeasure();
         closeSurfaceModal();await fetchData();await selectPermit(normalizePermit(result.data));
       } catch(error) {
         if (epoch !== state.authEpoch || q('#form-permit') !== form) return;
@@ -1316,6 +1396,16 @@
       showComplaintForm({ lat: parseFloat(card.dataset.lat), lng: parseFloat(card.dataset.lng) });
     });
 
+    q('#btn-coord-permit').addEventListener('click', () => {
+      if (!canApprove()) return;
+      const card = q('#google-coord-card');
+      const latitude = Number(card.dataset.lat);
+      const longitude = Number(card.dataset.lng);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+      card.style.display = 'none';
+      showNewPermitForm({ latitude, longitude });
+    });
+
     // 8. Bộ Điều khiển Bản đồ góc phải
     q('#btn-zoom-in').addEventListener('click', () => map && map.zoomIn(0.5));
     q('#btn-zoom-out').addEventListener('click', () => map && map.zoomOut(0.5));
@@ -1404,6 +1494,7 @@
     q('#btn-measure-clear').addEventListener('click', clearMeasurePoints);
     q('#btn-measure-save').addEventListener('click', saveCurrentMeasurement);
     q('#btn-measure-save-inspect').addEventListener('click', saveMeasurementToInspection);
+    q('#btn-permit-from-parcel').addEventListener('click', showPermitFormFromParcel);
 
     const btnClearSaved = q('#btn-clear-saved-measures');
     if (btnClearSaved) {
