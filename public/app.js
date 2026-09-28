@@ -75,6 +75,24 @@
   const canReceive = () => isStaff() && ['receptionist', 'coordinator', 'admin'].includes(state.role);
   const uniqueKey = prefix => `${prefix}-${crypto.randomUUID()}`;
   const displayValue = (value, unit = '') => value === null || value === undefined || value === '' ? 'Chưa có dữ liệu' : `${esc(value)}${unit ? ' ' + esc(unit) : ''}`;
+  const MY_COMPLAINT_CODES_KEY = 'qlttxd_my_complaints';
+  const MAX_SAVED_COMPLAINT_CODES = 15;
+  function savedComplaintCodes() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(MY_COMPLAINT_CODES_KEY) || '[]');
+      return Array.isArray(parsed) ? [...new Set(parsed.filter(code => typeof code === 'string' && /^TN-DEMO-[A-F0-9]{32}$/i.test(code)))].slice(0, MAX_SAVED_COMPLAINT_CODES) : [];
+    } catch { return []; }
+  }
+  function rememberComplaintCode(code) {
+    if (typeof code !== 'string' || !/^TN-DEMO-[A-F0-9]{32}$/i.test(code)) return false;
+    try {
+      localStorage.setItem(MY_COMPLAINT_CODES_KEY, JSON.stringify([code.toUpperCase(), ...savedComplaintCodes().filter(saved => saved !== code.toUpperCase())].slice(0, MAX_SAVED_COMPLAINT_CODES)));
+      return true;
+    } catch { return false; }
+  }
+  function forgetComplaintCode(code) {
+    try { localStorage.setItem(MY_COMPLAINT_CODES_KEY, JSON.stringify(savedComplaintCodes().filter(saved => saved !== code))); } catch {}
+  }
 
   async function api(url, options = {}) {
     const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store', ...options });
@@ -132,7 +150,7 @@
     q('#btn-logout').hidden = !isStaff();
     qa('[data-access]').forEach(el => {
       const access = el.dataset.access;
-      el.hidden = !(access === 'staff' ? isStaff() : access === 'inspect' ? canInspect() : access === 'approve' ? canApprove() : access === 'admin' ? state.role === 'admin' : false);
+      el.hidden = !(access === 'guest' ? !isStaff() : access === 'staff' ? isStaff() : access === 'inspect' ? canInspect() : access === 'approve' ? canApprove() : access === 'admin' ? state.role === 'admin' : false);
     });
     const parcelPermitButton = q('#btn-permit-from-parcel');
     if (parcelPermitButton) parcelPermitButton.hidden = !(canApprove() && state.measureMode === 'area' && state.measurePoints.length >= 3);
@@ -483,16 +501,18 @@
     q('#place-permit-num').textContent = permitData.permit_number;
     q('#place-address').textContent = permitData.site_address || 'Chưa xác định địa chỉ';
     q('#place-status-badge').textContent = permitData.status || 'Chưa xác định';
+    q('#place-tech-heading').textContent = isStaff() ? 'Thông số kỹ thuật cấp phép' : 'Giấy phép xây dựng · thông tin rút gọn';
     q('#place-stages-count').textContent = `${permitData.done}/4 mốc`;
     q('#place-stepper').innerHTML = STAGES.map((name, index) => `<div class="stepper-item ${index < permitData.done ? 'step-done' : index === permitData.done ? 'step-current' : ''}"><div class="stepper-num">${index < permitData.done ? '✓' : index + 1}</div><div class="stepper-text"><strong>${esc(name)}</strong><small>${index < permitData.done ? 'Đã duyệt kết quả kiểm tra' : 'Chưa duyệt kết quả'}</small></div></div>`).join('');
-    const specs = [
-      ['Chiều cao công trình', permitData.building_height, 'm'], ['Số tầng', permitData.floors_text],
+    const allSpecs = [
+      ['Chiều cao công trình', permitData.building_height, 'm'], ['Số tầng', permitData.floors_text || permitData.confirmed_floors],
       ['Diện tích xây dựng', permitData.building_area, 'm²'], ['Tổng diện tích sàn', permitData.total_floor_area, 'm²'],
       ['Chỉ giới đường đỏ', permitData.red_line_setback], ['Chỉ giới xây dựng', permitData.construction_boundary || permitData.setback_text],
       ['Cốt nền', permitData.ground_elevation], ['Mật độ xây dựng', permitData.building_density, '%'],
       ['Hệ số sử dụng đất', permitData.land_use_ratio], ['Màu sắc', permitData.exterior_color]
     ];
-    q('#place-tech-specs').innerHTML = `<div class="compact-permit-section">${isStaff() ? `<div class="permit-meta-strip"><div class="meta-strip-item"><span class="meta-lbl">Chủ hộ / CĐT:</span><strong class="meta-val">${displayValue(permitData.owner_name)}</strong></div><div class="meta-strip-item"><span class="meta-lbl">Hạn GPXD:</span><span class="meta-val">${displayValue(permitData.expiration_date)}</span></div></div>` : ''}<div class="tech-specs-compact-grid">${specs.map(([label, value, unit]) => `<div class="spec-tile"><div class="spec-tile-title">${label}</div><div class="spec-tile-text">${displayValue(value, unit)}</div></div>`).join('')}</div>${canApprove() ? `<button type="button" id="btn-publication" class="google-btn btn-neutral">${permitData.is_public ? 'Thu hồi công khai' : 'Duyệt công khai hồ sơ'}</button>` : ''}</div>`;
+    const specs = isStaff() ? allSpecs : allSpecs.filter(([, value]) => value !== null && value !== undefined && value !== '');
+    q('#place-tech-specs').innerHTML = `<div class="compact-permit-section">${isStaff() ? `<div class="permit-meta-strip"><div class="meta-strip-item"><span class="meta-lbl">Chủ hộ / CĐT:</span><strong class="meta-val">${displayValue(permitData.owner_name)}</strong></div><div class="meta-strip-item"><span class="meta-lbl">Hạn GPXD:</span><span class="meta-val">${displayValue(permitData.expiration_date)}</span></div></div>` : `<p class="citizen-permit-note">Thông tin rút gọn từ giấy phép đã duyệt công khai.</p>`}${specs.length ? `<div class="tech-specs-compact-grid">${specs.map(([label, value, unit]) => `<div class="spec-tile"><div class="spec-tile-title">${esc(label)}</div><div class="spec-tile-text">${displayValue(value, unit)}</div></div>`).join('')}</div>` : '<p>Chưa có dữ liệu kỹ thuật được duyệt công khai.</p>'}${canApprove() ? `<button type="button" id="btn-publication" class="google-btn btn-neutral">${permitData.is_public ? 'Thu hồi công khai' : 'Duyệt công khai hồ sơ'}</button>` : ''}</div>`;
     updateAccountUi();
     if (canApprove()) q('#btn-publication').addEventListener('click', async () => {
       try {
@@ -1102,8 +1122,10 @@
         const result = await postJson('/api/public/complaints', submittedPayload, key);
         if (!result.data?.id || !result.data?.lookup_code) throw new Error('Máy chủ chưa trả mã tra cứu. Hãy giữ biểu mẫu và gửi lại.');
         const code = result.data.lookup_code;
-        openSurfaceModal('Đã tiếp nhận phản ánh', `<p>Hãy lưu mã bí mật này để tra cứu. Người có mã có thể xem tiến độ phản ánh.</p><p class="lookup-code">${esc(code)}</p><button id="btn-lookup-submitted" class="google-btn btn-primary">Tra cứu tiến độ</button>`);
+        const remembered = rememberComplaintCode(code);
+        openSurfaceModal('Đã tiếp nhận phản ánh', `<p>${remembered ? 'Mã tra cứu đã được lưu trên trình duyệt này. Bạn vẫn nên ghi lại để tra cứu trên thiết bị khác.' : 'Hãy ghi lại mã bí mật để tự tra cứu; trình duyệt này không lưu được mã.'}</p><p class="lookup-code">${esc(code)}</p><div class="form-actions"><button id="btn-lookup-submitted" class="google-btn btn-neutral">Tra cứu tiến độ</button><button id="btn-my-complaints-submitted" class="google-btn btn-primary">Kiến nghị của tôi</button></div>`);
         q('#btn-lookup-submitted').addEventListener('click', () => showLookupForm(code));
+        q('#btn-my-complaints-submitted').addEventListener('click', showMyComplaintsScreen);
       } catch (error) {
         if (error.status && error.status < 500) submittedPayload = null;
         q('#complaint-error').textContent = `${error.message} Nội dung chưa được xác nhận đã lưu. Giữ biểu mẫu và bấm gửi lại để dùng cùng mã chống lặp.`;
@@ -1118,11 +1140,76 @@
       try {
         const result = await api(`/api/public/complaints/lookup?code=${encodeURIComponent(q('#lookup-code').value.trim())}`);
         const c = result.data;
-        q('#lookup-result').innerHTML = `<article class="record-row"><strong>${esc(c.title)}</strong><p>${esc(c.status_label || c.status)}</p><p>${esc(c.location_text)}</p><p>${esc(c.content)}</p><h3>Kết quả được duyệt</h3><p>${esc(c.official_reply || c.reply || 'Chưa có phản hồi được duyệt.')}</p></article>`;
+        rememberComplaintCode(q('#lookup-code').value.trim());
+        q('#lookup-result').innerHTML = `<article class="record-row"><strong>${esc(c.title)}</strong><p>${esc(c.status_label || c.status)}</p><p>${esc(c.location_text)}</p><p>${esc(c.content)}</p><h3>Kết quả được duyệt</h3><p>${esc(c.official_reply || c.reply || 'Chưa có phản hồi được duyệt.')}</p><button type="button" id="btn-my-complaints-lookup" class="google-btn btn-neutral">Xem kiến nghị của tôi</button></article>`;
+        q('#btn-my-complaints-lookup').addEventListener('click', showMyComplaintsScreen);
       } catch (error) { q('#lookup-result').textContent = error.message; }
     };
     q('#form-lookup').addEventListener('submit', event => { event.preventDefault(); lookup(); });
     if (initialCode) lookup();
+  }
+
+  function showMyComplaintsScreen() {
+    openSurfaceModal('Kiến nghị của tôi', `<p>Các phản ánh đã gửi trên trình duyệt này. Nhập mã bí mật để thêm phản ánh đã gửi ở thiết bị khác.</p><form id="form-add-my-complaint" class="app-form"><label for="my-complaint-code">Mã tra cứu bí mật</label><input id="my-complaint-code" placeholder="TN-DEMO-…" autocomplete="off" required><button type="submit" class="google-btn btn-neutral">Thêm phản ánh bằng mã</button></form><div id="my-complaints-list" class="my-complaints-list" aria-live="polite"></div>`);
+    const list = q('#my-complaints-list');
+    let loadRevision = 0;
+
+    const render = (rows, codes) => {
+      if (!rows.length) {
+        list.innerHTML = '<p class="citizen-permit-note">Chưa có phản ánh được lưu trên trình duyệt này. Nhập mã bí mật ở trên để tìm phản ánh đã gửi.</p>';
+        return;
+      }
+      list.innerHTML = rows.map((row, index) => row.error
+        ? `<article class="my-complaint-card"><strong>Không tra cứu được phản ánh</strong><p>${esc(row.error)}</p><button type="button" class="google-btn btn-neutral btn-sm" data-remove-my-complaint="${index}">Bỏ mã khỏi danh sách này</button></article>`
+        : `<article class="my-complaint-card"><div class="my-complaint-heading"><strong>${esc(row.complaint.title || 'Phản ánh hiện trường')}</strong><span class="google-badge badge-neutral">${esc(row.complaint.status_label || 'Đang xử lý')}</span></div><p class="my-complaint-location">${esc(row.complaint.location_text || 'Chưa có địa điểm')}</p><p>${esc(row.complaint.content || '')}</p><small>Gửi lúc ${esc(new Date(row.complaint.created_at).toLocaleString('vi-VN'))}</small>${row.complaint.official_reply ? `<div class="my-complaint-reply"><strong>Phản hồi đã được duyệt</strong><p>${esc(row.complaint.official_reply)}</p></div>` : '<p class="my-complaint-pending">Chưa có phản hồi được duyệt.</p>'}<button type="button" class="google-btn btn-neutral btn-sm" data-remove-my-complaint="${index}">Bỏ khỏi danh sách trên thiết bị này</button></article>`
+      ).join('');
+      list.querySelectorAll('[data-remove-my-complaint]').forEach(button => button.addEventListener('click', () => {
+        const code = codes[Number(button.dataset.removeMyComplaint)];
+        if (code) forgetComplaintCode(code);
+        load();
+      }));
+    };
+
+    const load = async () => {
+      const revision = ++loadRevision;
+      const codes = savedComplaintCodes();
+      if (!codes.length) { render([], codes); return; }
+      list.textContent = 'Đang tải trạng thái kiến nghị…';
+      const rows = [];
+      for (const code of codes) {
+        if (q('#my-complaints-list') !== list || revision !== loadRevision) return;
+        try {
+          const result = await api(`/api/public/complaints/lookup?code=${encodeURIComponent(code)}`);
+          rows.push({ complaint: result.data });
+        } catch (error) { rows.push({ error: error.message }); }
+      }
+      if (q('#my-complaints-list') === list && revision === loadRevision) render(rows, codes);
+    };
+
+    q('#form-add-my-complaint').addEventListener('submit', async event => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const codeInput = q('#my-complaint-code');
+      const code = codeInput.value.trim().toUpperCase();
+      const button = form.querySelector('button[type="submit"]');
+      if (!/^TN-DEMO-[A-F0-9]{32}$/.test(code)) {
+        showToast('Mã tra cứu cần có dạng TN-DEMO- theo sau bởi 32 ký tự chữ hoặc số.');
+        return;
+      }
+      button.disabled = true;
+      try {
+        const result = await api(`/api/public/complaints/lookup?code=${encodeURIComponent(code)}`);
+        const remembered = rememberComplaintCode(code);
+        codeInput.value = '';
+        showToast(remembered ? `Đã thêm: ${result.data.status_label || 'đang xử lý'}.` : 'Đã tra cứu được, nhưng trình duyệt không lưu được mã này.');
+        if (remembered) await load();
+        else render([{ complaint: result.data }], [code]);
+      } catch (error) {
+        showToast(error.message, 6000);
+      } finally { button.disabled = false; }
+    });
+
+    load();
   }
 
   async function showComplaintsScreen() {
@@ -1312,6 +1399,7 @@
 
     q('#btn-login').addEventListener('click', () => { q('#google-account-popup').classList.remove('show'); showLoginForm(); });
     q('#btn-logout').addEventListener('click', () => { q('#google-account-popup').classList.remove('show'); logout(); });
+    q('#btn-my-complaints-account').addEventListener('click', () => { q('#google-account-popup').classList.remove('show'); showMyComplaintsScreen(); });
 
     // 3. Filter Chips
     qa('.google-chip').forEach(chip => {
@@ -1473,6 +1561,7 @@
         else if (nav === 'settings') showSettingsScreen();
         else if (nav === 'complaints') showComplaintsScreen();
         else if (nav === 'sendComplaint') showComplaintForm();
+        else if (nav === 'myComplaints') showMyComplaintsScreen();
         else if (nav === 'lookup') showLookupForm();
         else if (nav === 'newPermit') showNewPermitForm();
         else if (nav === 'batch') showBatchForm();
