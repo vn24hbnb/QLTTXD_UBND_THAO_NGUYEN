@@ -267,7 +267,7 @@ export async function requestHandler(req, res) {
       if (pathname === '/api/internal/permits' && method === 'GET') return dataResponse(res, await permitsService.getInternalPermits(queryOptions(url)));
       if (pathname === '/api/internal/permits' && method === 'POST') {
         requireRole(currentUser, APPROVERS);
-        return dataResponse(res, await permitsService.createPermit(await parseBody(req), userId), 201, 'Đã tạo hồ sơ giấy phép');
+        return dataResponse(res, await permitsService.createPermit(await parseBody(req), userId, req.headers['idempotency-key']), 201, 'Đã tạo hồ sơ giấy phép');
       }
       match = pathname.match(/^\/api\/internal\/permits\/([^/]+)\/publication$/);
       if (match && method === 'POST') {

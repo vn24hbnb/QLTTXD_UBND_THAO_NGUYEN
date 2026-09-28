@@ -67,7 +67,7 @@ function harness(handler = async () => ({success:true,data:[]})) {
     if(result?.response)return result.response;
     return {ok:true,status:200,json:async()=>result};
   }};
-  const script=app.replace(/\}\)\(\);\s*$/, 'window.__review = {state,api,setUser,restoreSession,fetchData,normalizePermit,selectPermit,showLoginForm,logout,showComplaintForm,showLookupForm,showPermitA4Modal,saveOfflineDraft,loadOfflineDrafts,inspectionPayload,showSettingsScreen,showReportsScreen};})();');
+  const script=app.replace(/\}\)\(\);\s*$/, 'window.__review = {state,api,setUser,restoreSession,fetchData,normalizePermit,selectPermit,showLoginForm,logout,showComplaintForm,showLookupForm,showPermitA4Modal,saveOfflineDraft,loadOfflineDrafts,inspectionPayload,showSettingsScreen,showReportsScreen,showNewPermitForm,showBatchForm};})();');
   vm.createContext(context);vm.runInContext(script,context);
   const el=id=>{const node=registry.get(id);assert.ok(node,`Expected DOM element #${id}`);return node;};
   const trigger=async(id,type='click')=>{const node=el(id);assert.ok(node.handlers.has(type),`Expected ${type} listener on #${id}`);await node.handlers.get(type)({currentTarget:node,target:node,preventDefault(){}});await new Promise(resolve=>setImmediate(resolve));};
@@ -81,12 +81,12 @@ test('frontend defaults to public and staff role comes only from login/session, 
   const h=harness(async req=>req.url.endsWith('/login')?{success:true,user:{...officer,role:'coordinator'}}:{success:true,data:[permit]});
   assert.equal(h.ui.state.role,'citizen');
   assert.doesNotMatch(app,/admin123456|tracking_code|TN-DEMO-7K4P/);
-  h.ui.showLoginForm();h.el('login-username').value='canbo';h.el('login-password').value='test-only-password';h.el('login-totp').value='123456';
+  h.ui.showLoginForm();assert.equal(h.el('login-totp').hidden,true);h.el('login-username').value='canbo';h.el('login-password').value='test-only-password';
   await h.trigger('form-login','submit');
   assert.equal(h.ui.state.role,'coordinator');
   assert.equal(h.el('btn-login').hidden,true);
   const body=JSON.parse(h.requests.find(r=>r.url.endsWith('/login')).body);
-  assert.equal(body.totp_token,'123456');
+  assert.equal(body.totp_token,undefined);
   assert.equal(h.ui.state.permits[0].place,'Tổ 8');assert.equal(h.ui.state.permits[0].done,2);
 });
 
@@ -94,6 +94,9 @@ test('frontend keeps anonymous state when login rejects TOTP',async()=>{
   const h=harness(async()=>({response:{ok:false,status:401,json:async()=>({success:false,requireTotp:true,error:'Cần mã TOTP'})}}));
   h.ui.showLoginForm();h.el('login-username').value='canbo';h.el('login-password').value='test-only-password';
   await h.trigger('form-login','submit');assert.equal(h.ui.state.role,'citizen');assert.equal(h.el('login-error').textContent,'Cần mã TOTP');
+  assert.equal(h.el('login-totp-label').hidden,false);assert.equal(h.el('login-totp').hidden,false);
+  h.el('login-totp').value='123456';await h.trigger('form-login','submit');
+  assert.equal(JSON.parse(h.requests.at(-1).body).totp_token,'123456');
 });
 
 test('frontend logout clears private DOM, memory, and user-scoped drafts',async()=>{
@@ -162,4 +165,31 @@ test('service worker never intercepts API files, private prints, or third-party 
   for(const url of ['https://example.test/api/files/private.svg','https://example.test/api/internal/inspections/1/print','https://example.test/api/public/permits','https://cdn.example/app.js']){
     let intercepted=false;events.get('fetch')({request:{url,method:'GET'},respondWith(){intercepted=true;}});assert.equal(intercepted,false,url);
   }
+});
+
+test('frontend nhập thủ công giữ đủ chỉ tiêu và cùng nội dung/khóa sau mất mạng',async()=>{
+  const h=harness(async()=>new Error('Mất kết nối'));h.ui.setUser({...officer,role:'admin'});h.ui.showNewPermitForm();
+  for(const [name,value] of Object.entries({permit_number:'FORM-01',issue_date:'2026-09-28',issuing_authority:'UBND',owner_name:'Thử nghiệm',site_address:'Tổ 1',construction_type:'Nhà ở',owner_address:'Địa chỉ riêng',building_height:'8.5',basement_floors:'1',design_doc:'Bản vẽ'})) h.el('permit-'+name).value=value;
+  await h.trigger('form-permit','submit');h.el('permit-building_height').value='9';await h.trigger('form-permit','submit');
+  const requests=h.requests.filter(r=>r.url==='/api/internal/permits');assert.equal(requests.length,2);
+  assert.equal(requests[0].headers['Idempotency-Key'],requests[1].headers['Idempotency-Key']);assert.equal(requests[0].body,requests[1].body);
+  const data=JSON.parse(requests[0].body);assert.equal(data.building_height,8.5);assert.equal(data.basement_floors,1);assert.equal(data.longitude,null);assert.equal(data.land_area,null);assert.equal(data.design_doc,'Bản vẽ');
+});
+
+const batchPreview={success:true,totalRows:1,validCount:1,errorCount:0,previewRows:[{rowNumber:2,isValid:true,errors:[],data:{permit_number:'CSV-ONE',site_address:'Tổ 1'}}]};
+test('frontend bỏ phản hồi xem trước khi đã chọn tệp khác',async()=>{
+  let release;const h=harness(()=>new Promise(resolve=>{release=resolve;}));h.ui.setUser({...officer,role:'admin'});h.ui.showBatchForm();
+  h.el('batch-file').files=[{name:'old.csv',size:10,text:async()=>'old'}];
+  const pending=h.trigger('form-batch','submit');await new Promise(resolve=>setImmediate(resolve));
+  h.el('batch-file').files=[{name:'new.csv',size:10,text:async()=>'new'}];await h.trigger('batch-file','change');
+  release({success:true,data:batchPreview});await pending;
+  assert.equal(h.el('batch-commit').hidden,true);assert.equal(h.el('batch-preview').textContent,'');
+});
+
+test('frontend nhập CSV thử lại cùng lô và khóa khi chưa nhận xác nhận',async()=>{
+  const h=harness(async req=>req.url.endsWith('/preview')?{success:true,data:batchPreview}:new Error('Mất kết nối'));
+  h.ui.setUser({...officer,role:'admin'});h.ui.showBatchForm();h.el('batch-file').files=[{name:'one.csv',size:10,text:async()=>'one'}];
+  await h.trigger('form-batch','submit');assert.equal(h.el('batch-commit').hidden,false);
+  await h.trigger('batch-commit');assert.equal(h.el('batch-file').disabled,true);await h.trigger('batch-commit');
+  const commits=h.requests.filter(req=>req.url.endsWith('/commit'));assert.equal(commits.length,2);assert.equal(commits[0].body,commits[1].body);assert.equal(commits[0].headers['Idempotency-Key'],commits[1].headers['Idempotency-Key']);
 });

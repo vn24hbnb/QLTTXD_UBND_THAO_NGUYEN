@@ -233,3 +233,19 @@ test('HTTP: chỉ điều phối được tiếp tục công trình sau khi gỡ
   assert.equal(resumed.json.data.version_id, stopped.version_id + 1);
   assert.equal((await request(route, { method: 'POST', role: 'coordinator', body })).status, 409);
 });
+
+test('HTTP: Nhập giấy phép đủ chỉ tiêu, thử lại không tạo trùng và không lộ thông tin công khai', async () => {
+  const body = {permit_number:'HTTP-NEW-IMPORT',issue_date:'2026-09-28',issuing_authority:'UBND thử nghiệm',owner_name:'PRIVATE TEST OWNER',owner_address:'PRIVATE TEST ADDRESS',site_address:'Tổ 1',construction_type:'Nhà ở',land_area:180,building_area:100,total_floor_area:200,confirmed_floors:2,basement_floors:1,building_height:8.5,building_density:55,design_doc:'Bản vẽ thử nghiệm',expiration_date:'2027-09-28'};
+  const options = {method:'POST',role:'admin',body,headers:{'Idempotency-Key':'http-new-permit-key-0001'}};
+  assert.equal((await request('/api/internal/permits',{...options,role:'inspector'})).status,403);
+  const created = await request('/api/internal/permits',options);
+  assert.equal(created.status,201,JSON.stringify(created.json));
+  const repeated = await request('/api/internal/permits',options);
+  assert.equal(repeated.status,201);assert.equal(repeated.json.data.id,created.json.data.id);
+  assert.equal(created.json.data.status,'Chờ xác nhận vị trí');
+  assert.equal(created.json.data.building_height,8.5);assert.equal(created.json.data.is_public,0);
+  assert.equal((await request('/api/public/permits/'+created.json.data.id)).status,404);
+  assert.equal((await request('/api/internal/permits',{...options,body:{...body,building_area:101}})).status,409);
+  assert.equal((await request('/api/internal/permits',{...options,headers:{'Idempotency-Key':'http-other-permit-key-0001'},body:{...body,permit_number:body.permit_number.toLowerCase()}})).status,409);
+  assert.equal((await request('/api/internal/permits',{...options,headers:{},body:{...body,permit_number:'HTTP-INVALID-DATE',issue_date:'2026-02-30'}})).status,400);
+});

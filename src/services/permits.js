@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import dbService from '../db/database.js';
-import { text, number, date, coordinates, expectedVersion, audit, fail, requireStaff } from './validation.js';
+import { text, number, date, coordinates, expectedVersion, audit, fail, requireStaff, idempotent } from './validation.js';
 
 const PUBLIC_COLUMNS = 'id, permit_number, site_address, construction_type, building_area, total_floor_area, floors_text, confirmed_floors, building_height, red_line_setback, construction_boundary, setback_text, status, current_stage, longitude, latitude, updated_at';
 export function validatePermit(data) {
@@ -59,13 +59,14 @@ export async function getInternalPermits(options) { return listPermits(true, opt
 export async function getPermitById(id, isInternal = false) {
   return dbService.get(`SELECT ${isInternal ? '*' : PUBLIC_COLUMNS} FROM permits WHERE id = ?${isInternal ? '' : ' AND is_public = 1'}`, [id]);
 }
-export async function createPermit(data, userId) {
+export async function createPermit(data, userId, idempotencyKey = null) {
   await requireStaff(userId,['admin','coordinator']);
   const d = validatePermit(data);
   const id = `permit-${crypto.randomUUID()}`;
   const now = new Date().toISOString();
   const status = d.longitude == null ? 'Chờ xác nhận vị trí' : 'Cần kiểm tra';
-  return dbService.transaction(async db => {
+  return idempotent('/api/internal/permits', userId, idempotencyKey, d, async db => {
+    if (await db.get('SELECT id FROM permits WHERE UPPER(permit_number) = ?', [d.permit_number.toUpperCase()])) fail('Số giấy phép đã tồn tại', 409);
     const columns = Object.keys(d);
     await db.run(`INSERT INTO permits (id,${columns.join(',')},status,current_stage,version_id,is_public,created_at,updated_at) VALUES (${Array(columns.length+7).fill('?').join(',')})`,[id,...Object.values(d),status,0,1,0,now,now]);
     await audit(db,userId,'CREATE_PERMIT','permits',id,{permit_number:d.permit_number,is_public:false});

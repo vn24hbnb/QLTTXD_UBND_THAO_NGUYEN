@@ -6,7 +6,12 @@ export { hashPassword } from '../services/auth.js';
 export function seed() {
   if (process.env.NODE_ENV === 'production' || process.env.DATABASE_URL) throw new Error('Không nạp dữ liệu thử nghiệm vào máy chủ.');
   const db = dbService.getDb();
-  if (db.prepare('SELECT COUNT(*) AS n FROM users').get().n) return;
+  if (db.prepare('SELECT COUNT(*) AS n FROM users').get().n) {
+    // Previous local demo seeds enabled TOTP for this synthetic account.
+    // Clear it only for that exact fixture; leave every provisioned account alone.
+    db.prepare("UPDATE users SET totp_secret = NULL WHERE id = 'usr-admin' AND username = 'admin' AND full_name = 'Tài khoản thử nghiệm admin' AND role = 'admin'").run();
+    return;
+  }
   const now = new Date().toISOString();
   db.exec('BEGIN IMMEDIATE');
   try {
@@ -16,7 +21,7 @@ export function seed() {
       ['usr-inspector','inspector1','inspect123456','inspector'],
       ['usr-coordinator','coordinator1','coordinate123456','coordinator'],
       ['usr-citizen','citizen1','citizen123456','citizen']
-    ]) insert.run(id,username,hashPassword(password),'Tài khoản thử nghiệm '+role,role,role==='admin'?'JBSWY3DPEHPK3PXP':null,now);
+    ]) insert.run(id,username,hashPassword(password),'Tài khoản thử nghiệm '+role,role,null,now);
   const basePermits = [
     { num: '018', type: 'Nhà ở riêng lẻ', place: 'Tổ dân phố 1, đường Lê Thanh Nghị', status: 'Cần kiểm tra', done: 1, coord: [104.688, 20.893], owner: 'Nguyễn Văn An', area: 120, totalFloor: 240, floors: '02 tầng', setback: 'Khoảng lùi 3 m' },
     { num: '021', type: 'Nhà ở riêng lẻ', place: 'Tổ dân phố 2, tiểu khu Thảo Nguyên', status: 'Cần kiểm tra', done: 2, coord: [104.696, 20.828], owner: 'Trần Đình Trọng', area: 150, totalFloor: 450, floors: '03 tầng', setback: 'Khoảng lùi 3.5 m' },

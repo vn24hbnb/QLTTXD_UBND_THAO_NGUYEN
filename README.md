@@ -46,6 +46,14 @@ node --env-file=.env.production scripts/create-staff.js <username> admin <passwo
 
 Mật khẩu phải dài ít nhất 16 ký tự; quản trị viên cần khóa TOTP riêng có 32 ký tự Base32. Tạo coordinator hoặc inspector tương tự, bỏ đường dẫn TOTP. Không chia sẻ tệp mật khẩu.
 
+## Nhập giấy phép xây dựng
+
+Trong menu cán bộ, chọn **Nhập giấy phép đã cấp** để nhập từng hồ sơ hoặc **Nhập danh sách GPXD (CSV)** để nhập hàng loạt. Biểu mẫu gồm thông tin cấp phép, chủ đầu tư, các chỉ tiêu kỹ thuật, hồ sơ thiết kế, giấy tờ đất và vị trí.
+
+Tải mẫu từ liên kết trong cửa sổ nhập CSV. Chấp nhận CSV UTF-8, tối đa 2 MB và 1.000 hồ sơ, phân cách bằng dấu phẩy/chấm phẩy/tab. Hỗ trợ ngày `DD/MM/YYYY` hoặc `YYYY-MM-DD`, số thập phân dấu chấm hoặc dấu phẩy (ô có dấu phẩy phải đặt trong nháy kép nếu tệp phân cách bằng dấu phẩy). Cột không nhận diện sẽ được báo lỗi; cần sửa hết lỗi trước khi nhập. Excel `.xlsx`, PDF và ảnh chưa được nhập trực tiếp; hãy chuyển dữ liệu sang CSV theo mẫu.
+
+Hồ sơ mới lưu ở chế độ nội bộ. Khi mất mạng sau khi gửi, giữ nguyên cửa sổ và bấm lưu/nhập lại để xác nhận cùng hồ sơ hoặc cùng lô mà không tạo bản trùng.
+
 ## Sao lưu / phục hồi
 
 - `npm run backup` tạo snapshot SQLite nhất quán, kiểm tra checksum, integrity và khóa ngoại.

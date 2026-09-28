@@ -99,3 +99,28 @@ test('BATCH IMPORT: Ghi nhận chính thức danh sách hợp lệ vào CSDL (Co
   assert.strictEqual(batchLog.filename, 'danh_sach_2026.csv');
   assert.strictEqual(batchLog.valid_rows, 1);
 });
+
+test('BATCH IMPORT: Mẫu CSV giữ đầy đủ chỉ tiêu, ngày và dữ liệu chủ hộ riêng tư', async () => {
+  const fs = await import('node:fs');
+  const header = fs.readFileSync(new URL('../public/mau-nhap-giay-phep.csv', import.meta.url),'utf8').trim();
+  const fields = batchImportService.parseCsv(header).headers.map(batchImportService.mapHeaderToField);
+  const values = {permit_number:'GP-FULL-CSV',issue_date:'28/09/2026',issuing_authority:'UBND thử nghiệm',owner_name:'Tên thử nghiệm',owner_address:'Địa chỉ riêng tư',site_address:'Tổ 1',construction_type:'Nhà ở',land_area:'150,5',building_area:'100,5',total_floor_area:'201',land_use_ratio:'1,2',floors_text:'2 tầng',confirmed_floors:'2',basement_floors:'1',mezzanine_floors:'1',building_height:'8,5',building_density:'66,7',setback_text:'3 m',red_line_setback:'Đường đỏ',construction_boundary:'Ranh giới',ground_elevation:'+0.45 m',exterior_color:'Trắng',land_lot:'Thửa 1',design_by:'Đơn vị thử nghiệm',design_doc:'Hồ sơ thử nghiệm',land_use_cert:'Giấy tờ thử nghiệm',expiration_date:'28/09/2027',longitude:'104,685',latitude:'20,891',commune_code:'03982'};
+  const csv = header.replace(/,/g,';')+'\n'+fields.map(field=>values[field]).join(';');
+  const preview = await batchImportService.previewBatch(csv);
+  assert.equal(preview.validCount,1,JSON.stringify(preview.errors));
+  const result = await batchImportService.commitBatch(preview.previewRows,'usr-admin','full.csv','full-csv-retry-key-0001');
+  const again = await batchImportService.commitBatch(preview.previewRows,'usr-admin','full.csv','full-csv-retry-key-0001');
+  assert.equal(again.batchId,result.batchId);
+  const row = await dbService.get('SELECT * FROM permits WHERE id = ?', [result.permits[0].id]);
+  assert.equal(row.building_area,100.5);assert.equal(row.basement_floors,1);assert.equal(row.mezzanine_floors,1);
+  assert.equal(row.expiration_date,'2027-09-28');assert.equal(row.owner_address,'Địa chỉ riêng tư');assert.equal(row.is_public,0);
+  for (const field of ['land_lot','design_by','design_doc','land_use_cert','red_line_setback','construction_boundary','ground_elevation','exterior_color']) assert.equal(row[field],values[field]);
+});
+
+test('BATCH IMPORT: Cột không nhận diện hoặc hai cột cùng ý nghĩa không bị bỏ qua', async () => {
+  await assert.rejects(batchImportService.previewBatch('Số giấy phép,Cột sai\nGP-X,10'),/Không nhận diện/);
+  await assert.rejects(batchImportService.previewBatch('Số giấy phép,permit_number\nGP-X,GP-Y'),/cột trùng/);
+  assert.equal(batchImportService.mapHeaderToField('Số tầng hầm'),'basement_floors');
+  assert.equal(batchImportService.mapHeaderToField('Diện tích xây dựng (m²)'),'building_area');
+  assert.equal(batchImportService.parseCsv('Số giấy phép\tNgày cấp\nGP-TAB\t28/09/2026').rows[0][0],'GP-TAB');
+});
