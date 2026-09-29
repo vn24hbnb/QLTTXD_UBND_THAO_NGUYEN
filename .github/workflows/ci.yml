@@ -39,6 +39,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Dựng các schema/vai trò do Supabase cung cấp sẵn
         run: |
+          # Image postgis đã cài PostGIS vào schema public; Supabase đặt nó trong schema extensions.
+          psql -v ON_ERROR_STOP=1 -c "DROP EXTENSION IF EXISTS postgis CASCADE;"
           psql -v ON_ERROR_STOP=1 -c "CREATE SCHEMA extensions; CREATE SCHEMA storage;
             CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN;
             CREATE TABLE storage.buckets(id text PRIMARY KEY, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);"
