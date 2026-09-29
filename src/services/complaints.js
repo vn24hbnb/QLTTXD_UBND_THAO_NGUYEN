@@ -42,6 +42,31 @@ export async function lookupComplaint(lookupCode) {
     created_at,updated_at FROM complaints WHERE lookup_code = ?`,[code.toUpperCase()]);
   return label(complaint);
 }
+// Bản đồ công khai chỉ hiển thị phản ánh đã có kết quả xác minh của cán bộ (bước 4 "Chờ duyệt" trở đi),
+// theo AGENTS.md: phản ánh chưa xác minh/duyệt không xuất hiện công khai.
+export const PUBLIC_MAP_MIN_STEP = 4;
+const PUBLIC_MAP_LABELS = { 4: 'Đang xử lý', 5: 'Đã phản hồi' };
+// Địa chỉ do người dân tự nhập nên có thể lẫn số điện thoại hoặc email; che trước khi công khai.
+export function maskContacts(value) {
+  return String(value ?? '')
+    .replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, '[đã ẩn]')
+    .replace(/\+?\d[\d ().-]{6,}\d/g, '[đã ẩn]');
+}
+/** Điểm phản ánh cho bản đồ công khai: chỉ vị trí, địa chỉ và tiến độ; không mã tra cứu, nội dung hay liên hệ. */
+export async function getPublicComplaintPins({ limit = 500 } = {}) {
+  const rows = await dbService.all(
+    `SELECT location_text, longitude, latitude, status_step, updated_at FROM complaints
+     WHERE status_step >= ? AND master_complaint_id IS NULL AND longitude IS NOT NULL AND latitude IS NOT NULL
+     ORDER BY updated_at DESC LIMIT ?`,
+    [PUBLIC_MAP_MIN_STEP, number(limit, 'giới hạn', { integer: true, min: 1, max: 1000, required: true })]);
+  return rows.map(r => ({
+    location_text: maskContacts(r.location_text),
+    longitude: r.longitude,
+    latitude: r.latitude,
+    status_label: PUBLIC_MAP_LABELS[r.status_step] ?? 'Đang xử lý',
+    updated_at: r.updated_at
+  }));
+}
 export async function getInternalComplaints({statusStep=null,limit=100,offset=0}={}) {
   let sql='SELECT * FROM complaints WHERE 1=1';
   const params=[];
@@ -193,4 +218,4 @@ export async function mergeComplaints(targetId,sourceIds,reason,userId,{version_
     return {success:true,targetId,mergedCount:sourceIds.length};
   });
 }
-export default {COMPLAINT_STEPS,generateLookupCode,submitComplaint,lookupComplaint,getInternalComplaints,getComplaintById,updateComplaintStep,reopenComplaint,findDuplicateComplaints,mergeComplaints};
+export default {COMPLAINT_STEPS,generateLookupCode,submitComplaint,lookupComplaint,getInternalComplaints,getPublicComplaintPins,getComplaintById,updateComplaintStep,reopenComplaint,findDuplicateComplaints,mergeComplaints};

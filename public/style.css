@@ -171,6 +171,9 @@ path:focus-visible {
   animation: markerPulse 2s infinite;
 }
 
+/* Ghim vị trí có phản ánh: màu tím, không nhấp nháy để phân biệt với cảnh báo công trình */
+.google-marker-pin.pin-complaint { animation: none; }
+
 @keyframes markerPulse {
   0% { filter: drop-shadow(0 0 0 rgba(234, 67, 53, 0.7)); }
   70% { filter: drop-shadow(0 0 12px rgba(234, 67, 53, 0)); }

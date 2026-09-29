@@ -23,6 +23,8 @@
     currentLayer: 'satellite',
     showBoundary: true,
     showMarkers: true,
+    showComplaintPins: true,
+    complaintPins: [],
     showComplaints: true,
     geoData: null,
     offlineDrafts: [],
@@ -301,6 +303,7 @@
     boundaryLayerGroup = L.layerGroup().addTo(map);
     markersLayerGroup = L.layerGroup().addTo(map);
     complaintsLayerGroup = L.layerGroup().addTo(map);
+    renderComplaintPins();
     state.measureLayer = L.layerGroup().addTo(map);
 
     // Chọn điểm phản ánh bằng nhấp đúp; click đơn chỉ dùng để đo khi bật thước.
@@ -382,6 +385,31 @@
       updateFilterCounts();
       renderMarkers();
     } catch (error) { showToast(error.message, 6000); }
+    await fetchComplaintPins(epoch);
+  }
+
+  // Vị trí phản ánh đã được cán bộ xác minh; công khai, không có danh tính hay nội dung phản ánh.
+  async function fetchComplaintPins(epoch = state.authEpoch) {
+    try {
+      const result = await api('/api/public/complaints/map');
+      if (epoch !== state.authEpoch) return;
+      state.complaintPins = Array.isArray(result.data) ? result.data : [];
+    } catch { state.complaintPins = []; }
+    renderComplaintPins();
+  }
+
+  function renderComplaintPins() {
+    if (!complaintsLayerGroup) return;
+    complaintsLayerGroup.clearLayers();
+    if (!state.showComplaintPins) return;
+    for (const pin of state.complaintPins) {
+      const lat = Number(pin.latitude), lng = Number(pin.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      const icon = L.divIcon({ className: 'google-div-icon', html: getMarkerSvg('#8e24aa', '!', false).replace('google-marker-pin', 'google-marker-pin pin-complaint'), iconSize: [38, 46], iconAnchor: [19, 46], popupAnchor: [0, -42] });
+      L.marker([lat, lng], { icon, title: pin.location_text || 'Vị trí có phản ánh' })
+        .bindPopup(`<strong>Vị trí có phản ánh của người dân</strong><br>${esc(pin.location_text || 'Chưa rõ địa chỉ')}<br><em>${esc(pin.status_label || '')}</em>`)
+        .addTo(complaintsLayerGroup);
+    }
   }
 
   function updateFilterCounts() {
@@ -1532,6 +1560,11 @@
     q('#chk-boundary').addEventListener('change', e => {
       state.showBoundary = e.target.checked;
       renderBoundary();
+    });
+
+    q('#chk-complaints').addEventListener('change', e => {
+      state.showComplaintPins = e.target.checked;
+      renderComplaintPins();
     });
 
     q('#chk-markers').addEventListener('change', e => {

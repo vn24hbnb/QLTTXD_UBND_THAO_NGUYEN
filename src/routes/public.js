@@ -29,6 +29,7 @@ export async function handlePublic({ req, res, url, pathname, method, ip, curren
     if (!await checkRateLimit(`complaint:${ip}`, 10)) return sendError(res, 429, 'Vui lòng chờ trước khi gửi thêm phản ánh', 'RATE_LIMITED');
     return dataResponse(res, await complaintsService.submitComplaint(await parseBody(req), req.headers['idempotency-key'], currentUser?.user_id || 'anonymous'), 201, 'Đã tiếp nhận phản ánh thành công');
   }
+  if (pathname === '/api/public/complaints/map' && method === 'GET') return dataResponse(res, await complaintsService.getPublicComplaintPins());
   if (pathname === '/api/public/complaints/lookup' && method === 'GET') {
     if (!await checkRateLimit(`lookup:${ip}`, 30)) return sendError(res, 429, 'Vui lòng chờ trước khi tiếp tục tra cứu', 'RATE_LIMITED');
     const complaint = await complaintsService.lookupComplaint(url.searchParams.get('code'));
