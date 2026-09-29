@@ -1,7 +1,7 @@
 {
   "name": "qlttxd-thao-nguyen",
-  "version": "1.0.0",
-  "description": "H\u1ec7 th\u1ed1ng Qu\u1ea3n l\u00fd Tr\u1eadt t\u1ef1 X\u00e2y d\u1ef1ng ph\u01b0\u1eddng Th\u1ea3o Nguy\u00ean, t\u1ec9nh S\u01a1n La (M\u1ed1c A th\u1eed nghi\u1ec7m)",
+  "version": "1.1.0",
+  "description": "Hệ thống Quản lý Trật tự Xây dựng phường Thảo Nguyên, tỉnh Sơn La (Mốc A thử nghiệm)",
   "main": "src/server.js",
   "type": "module",
   "scripts": {
@@ -14,16 +14,17 @@
     "backup:cloud": "node --env-file-if-exists=.env scripts/backup-cloud.js",
     "restore:cloud": "node scripts/restore-cloud.js",
     "verify:postgres-restore": "node scripts/verify-postgres-restore.js",
-    "verify:deployment": "node scripts/verify-deployment.js"
+    "verify:deployment": "node scripts/verify-deployment.js",
+    "verify:backup-freshness": "node scripts/check-backup-freshness.js"
   },
   "keywords": [
     "qlttxd",
     "gis",
-    "maplibre",
+    "leaflet",
     "son-la",
     "thao-nguyen"
   ],
-  "author": "\u0110\u1ed9i d\u1ef1 \u00e1n QLTTXD Th\u1ea3o Nguy\u00ean",
+  "author": "Đội dự án QLTTXD Thảo Nguyên",
   "license": "UNLICENSED",
   "dependencies": {
     "@supabase/supabase-js": "2.116.0",

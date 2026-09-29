@@ -1,15 +1,12 @@
-version: '3.8'
-
 services:
   app:
     build: .
     container_name: qlttxd-thao-nguyen
     restart: unless-stopped
     ports:
-      - "3000:3000"
-    environment:
-      - PORT=3000
-      - NODE_ENV=production
-    volumes:
-      - ./data:/app/data
-      - ./backups:/app/backups
+      - "127.0.0.1:3000:3000"
+    # Tạo .env.production (không đưa lên Git) theo mục "Cấu hình production" trong README.
+    env_file: .env.production
+    read_only: true
+    tmpfs:
+      - /tmp

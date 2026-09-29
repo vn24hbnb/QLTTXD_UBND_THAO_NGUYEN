@@ -14,5 +14,46 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Kiểm tra cú pháp toàn bộ mã nguồn
+        run: find src scripts api public tests -name '*.js' -not -path 'public/vendor/*' -not -name 'd3.v7.min.js' -print0 | xargs -0 -n1 node --check
       - run: npm test
       - run: npm audit --omit=dev
+
+  postgres-schema:
+    # Áp dụng migration Supabase lên PostgreSQL + PostGIS thật để phát hiện lỗi cú pháp/ràng buộc
+    # mà kiểm thử SQLite không thấy được.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dựng các schema/vai trò do Supabase cung cấp sẵn
+        run: |
+          # Image postgis đã cài PostGIS vào schema public; Supabase đặt nó trong schema extensions.
+          psql -v ON_ERROR_STOP=1 -c "DROP EXTENSION IF EXISTS postgis CASCADE;"
+          psql -v ON_ERROR_STOP=1 -c "CREATE SCHEMA extensions; CREATE SCHEMA storage;
+            CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN;
+            CREATE TABLE storage.buckets(id text PRIMARY KEY, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);"
+      - name: Áp dụng toàn bộ migration theo thứ tự
+        run: |
+          for f in supabase/migrations/*.sql; do echo "== $f"; psql -v ON_ERROR_STOP=1 -f "$f"; done
+      - name: Nhật ký kiểm toán phải bất biến và vai trò tiếp nhận hợp lệ
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO users(id,username,password_hash,full_name,role,created_at) VALUES ('u','u','h','U','receptionist','now');
+          INSERT INTO audit_logs(action,entity_type,entity_id,created_at) VALUES ('X','t','1','now');
+          DO $$ BEGIN
+            BEGIN DELETE FROM audit_logs; RAISE EXCEPTION 'xóa nhật ký không bị chặn'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+            BEGIN UPDATE audit_logs SET action='Y'; RAISE EXCEPTION 'sửa nhật ký không bị chặn'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+          END $$;
+          SQL

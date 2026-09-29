@@ -1,6 +1,6 @@
 /* Chỉ lưu giao diện; hồ sơ, ảnh và bản in nghiệp vụ luôn yêu cầu máy chủ. */
-const CACHE_NAME = 'qlttxd-shell-v3';
-const STATIC_ASSETS = ['/', '/index.html', '/style.css', '/app.js', '/manifest.json', '/icon.svg'];
+const CACHE_NAME = 'qlttxd-shell-v4';
+const STATIC_ASSETS = ['/', '/index.html', '/style.css', '/app.js', '/vendor/leaflet/leaflet.js', '/vendor/leaflet/leaflet.css', '/manifest.json', '/icon.svg'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS)).then(() => self.skipWaiting()));
 });

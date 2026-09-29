@@ -7,7 +7,7 @@
   "functions": {
     "api/index.js": {
       "maxDuration": 60,
-      "includeFiles": "data/thao_nguyen_geo.json"
+      "includeFiles": "{data/thao_nguyen_geo.json,package.json}"
     }
   },
   "rewrites": [{"source": "/api/:path*", "destination": "/api"}],

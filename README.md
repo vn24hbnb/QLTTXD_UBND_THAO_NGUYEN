@@ -21,7 +21,7 @@ npm start
 
 ## Cấu hình production
 
-Tạo dự án PostgreSQL Supabase trống và áp dụng tệp trong `supabase/migrations/`. Migration bật PostGIS, Row Level Security cho mọi bảng nghiệp vụ, hạn chế dữ liệu API công khai, và tạo kho ảnh `qlttxd-private` ở chế độ private.
+Tạo dự án PostgreSQL Supabase trống và áp dụng lần lượt các tệp trong `supabase/migrations/`. Với cơ sở dữ liệu đã triển khai trước 29/09/2026, áp dụng thêm `20260929000000_auth_hardening.sql`: migration này thu hồi mọi phiên đăng nhập cũ (cán bộ đăng nhập lại) và chặn sửa/xóa nhật ký kiểm toán. Migration bật PostGIS, Row Level Security cho mọi bảng nghiệp vụ, hạn chế dữ liệu API công khai, và tạo kho ảnh `qlttxd-private` ở chế độ private.
 
 Thiết lập trên máy chủ:
 
@@ -32,6 +32,7 @@ DATABASE_CA_CERT=<CA certificate từ Database Settings>
 SUPABASE_URL=https://<project-ref>.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<khóa server secret; không dùng publishable key>
 SUPABASE_STORAGE_BUCKET=qlttxd-private
+TOTP_ENCRYPTION_KEY=<chuỗi ngẫu nhiên ≥ 32 ký tự, lưu ở kho bí mật riêng>
 ```
 
 Dùng Transaction Pooler cho Vercel. Bật xác thực SSL bằng CA Supabase; không đặt `rejectUnauthorized=false`. Không thêm `.env`, khóa API, dữ liệu CSDL, bản backup hay thông tin đăng nhập lên Git. Có thể thêm tên miền đã xác minh qua `APP_ORIGIN`.
@@ -44,7 +45,7 @@ Sau khi migration và biến môi trường có hiệu lực, tạo tài khoản
 node --env-file=.env.production scripts/create-staff.js <username> admin <password-file> <totp-file>
 ```
 
-Mật khẩu phải dài ít nhất 16 ký tự; quản trị viên cần khóa TOTP riêng có 32 ký tự Base32. Tạo coordinator hoặc inspector tương tự, bỏ đường dẫn TOTP. Không chia sẻ tệp mật khẩu.
+Mật khẩu phải dài ít nhất 16 ký tự; quản trị viên cần khóa TOTP riêng có 32 ký tự Base32. Điều phối (`coordinator`) cũng bắt buộc có khóa TOTP. Cán bộ tiếp nhận (`receptionist`) và kiểm tra (`inspector`) tạo tương tự, bỏ đường dẫn TOTP. Khóa TOTP được mã hóa bằng `TOTP_ENCRYPTION_KEY` trước khi lưu; đổi hoặc mất khóa này làm các khóa TOTP đã lưu không dùng được. Không chia sẻ tệp mật khẩu.
 
 ## Nhập giấy phép xây dựng
 
@@ -61,13 +62,17 @@ Hồ sơ mới lưu ở chế độ nội bộ. Khi mất mạng sau khi gửi, 
 - `npm run restore` yêu cầu thư mục backup và thư mục đích mới: `npm run restore -- backups/backup_<id> /srv/qlttxd-recovery`. Lệnh không ghi đè thư mục đang dùng.
 - Phục hồi PostgreSQL dùng `node --env-file=.env.recovery scripts/restore-cloud.js backups/cloud_<id>`. CSDL đích phải mới, có PostGIS trong schema `extensions` và kho ảnh private trống. Đã diễn tập phục hồi bản Supabase hiện tại lên PostgreSQL sạch; lệnh phục hồi thực tế chỉ chạy trên môi trường recovery riêng.
 
-Mỗi bản sao ghi lại thời điểm, số lượng hàng và mã SHA-256. Bản sao Supabase tạo ngày 23/09/2026 đã phục hồi thành công lên cụm PostgreSQL 18 sạch: đủ 13 bảng, 1 tài khoản quản trị, PostGIS SRID 4326. Cần chạy `backup:cloud` bằng lịch vận hành để duy trì RPO 24 giờ; một lần sao lưu thành công không tự tạo lịch định kỳ. Hãy kiểm tra phục hồi trên môi trường sạch trước khi nghiệm thu production.
+Mỗi bản sao ghi lại thời điểm, số lượng hàng và mã SHA-256. Bản sao Supabase tạo ngày 23/09/2026 đã phục hồi thành công lên cụm PostgreSQL 18 sạch: đủ 13 bảng, 1 tài khoản quản trị, PostGIS SRID 4326. Cần chạy `backup:cloud` bằng lịch vận hành để duy trì RPO 24 giờ; một lần sao lưu thành công không tự tạo lịch định kỳ. Xem `docs/runbooks/backup-schedule.md` (mẫu cron và `npm run verify:backup-freshness` để cảnh báo khi bản sao lưu quá hạn). Hãy kiểm tra phục hồi trên môi trường sạch trước khi nghiệm thu production.
 
 ## API và dữ liệu
 
 API trả JSON tiếng Việt. Người dân chỉ xem dữ liệu giấy phép đã công bố; danh tính chủ hộ, thông tin liên hệ, bản nháp phản ánh và ảnh hiện trường ở vùng nội bộ. Ghi nhận kiểm tra, phản ánh và nhập CSV dùng xác thực phía máy chủ, khóa phiên bản và `Idempotency-Key` ở luồng phù hợp.
 
 Ranh giới bản đồ nằm ở `data/thao_nguyen_geo.json`, GeoJSON WGS-84 `[kinh độ, vĩ độ]`. Đối soát nguồn dữ liệu GIS trước khi dùng làm ranh giới nghiệp vụ chính thức.
+
+## Docker
+
+`docker build -t qlttxd .` rồi chạy với `--env-file .env.production` (hoặc `docker compose up`). Image chỉ chứa mã chạy thật, không nạp dữ liệu mẫu và bắt buộc `DATABASE_URL` PostgreSQL.
 
 ## Triển khai
 
@@ -80,4 +85,4 @@ vercel deploy
 vercel deploy --prod
 ```
 
-CI kiểm thử Node 24 trên GitHub Actions. Tài khoản Vercel Hobby có thể giới hạn lịch Cron; backup định kỳ hiện được vận hành từ máy có quyền tới Supabase.
+CI trên GitHub Actions kiểm tra cú pháp, chạy kiểm thử Node 24, `npm audit`, và áp dụng migration Supabase lên PostgreSQL + PostGIS thật. Tài khoản Vercel Hobby có thể giới hạn lịch Cron; backup định kỳ hiện được vận hành từ máy có quyền tới Supabase.

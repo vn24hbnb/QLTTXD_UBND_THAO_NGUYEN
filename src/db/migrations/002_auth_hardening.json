@@ -1,0 +1,16 @@
+{
+  "disableForeignKeys": true,
+  "addColumns": {
+    "users": {
+      "failed_login_count": "INTEGER NOT NULL DEFAULT 0",
+      "locked_until": "TEXT"
+    }
+  },
+  "statements": [
+    "CREATE TABLE users_new (id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, full_name TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('admin', 'coordinator', 'inspector', 'receptionist', 'citizen')), totp_secret TEXT, is_active INTEGER DEFAULT 1, created_at TEXT NOT NULL, failed_login_count INTEGER NOT NULL DEFAULT 0, locked_until TEXT)",
+    "INSERT INTO users_new (id,username,password_hash,full_name,role,totp_secret,is_active,created_at,failed_login_count,locked_until) SELECT id,username,password_hash,full_name,role,totp_secret,is_active,created_at,failed_login_count,locked_until FROM users",
+    "DROP TABLE users",
+    "ALTER TABLE users_new RENAME TO users",
+    "DELETE FROM sessions"
+  ]
+}

@@ -52,7 +52,7 @@ export async function getInternalComplaints({statusStep=null,limit=100,offset=0}
 }
 export async function getComplaintById(id) { return rawComplaint(id); }
 export async function updateComplaintStep(id,{step,notes,reply,assigned_to,approved_read,version_id},userId) {
-  const user=await requireStaff(userId);
+  const user=await requireStaff(userId,['admin','coordinator','inspector','receptionist']);
   return dbService.transaction(async db=>{
     const complaint=await rawComplaint(id);
     if(!complaint) fail('Không tìm thấy phản ánh',404);
@@ -60,7 +60,9 @@ export async function updateComplaintStep(id,{step,notes,reply,assigned_to,appro
     if(complaint.master_complaint_id) fail('Phản ánh đã được gộp; xử lý tại hồ sơ chính',409);
     const nextStep=number(step,'bước xử lý',{integer:true,max:5,required:true});
     if(nextStep!==complaint.status_step+1) fail('Phải thực hiện đúng trình tự xử lý phản ánh',409);
-    if([1,2,5].includes(nextStep)&&!['admin','coordinator'].includes(user.role)) fail('Bước này cần quyền tiếp nhận hoặc phê duyệt',403);
+    if([1,2].includes(nextStep)&&!['admin','coordinator','receptionist'].includes(user.role)) fail('Bước này cần quyền tiếp nhận hoặc phê duyệt',403);
+    if(nextStep===5&&!['admin','coordinator'].includes(user.role)) fail('Bước này cần quyền tiếp nhận hoặc phê duyệt',403);
+    if(user.role==='receptionist'&&![1,2].includes(nextStep)) fail('Cán bộ tiếp nhận chỉ thực hiện bước tiếp nhận và phân công',403);
     if(user.role==='inspector'&&complaint.assigned_to!==userId) fail('Phản ánh chưa được phân công cho bạn',403);
     const assignedTo=text(assigned_to,'cán bộ được phân công',{max:200})||complaint.assigned_to;
     if(nextStep===2){ if(!assignedTo) fail('Phải chọn cán bộ phụ trách'); await requireStaff(assignedTo); }
