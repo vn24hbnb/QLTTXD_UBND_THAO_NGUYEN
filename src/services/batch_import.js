@@ -171,7 +171,8 @@ export async function previewBatch(csvContent) {
   const validCount=previewRows.filter(row=>row.isValid).length;
   return {success:true,totalRows:rows.length,validCount,errorCount:rows.length-validCount,errors,previewRows};
 }
-export async function commitBatch(validRows,userId,filename='import.csv',idempotencyKey=null) {
+export async function commitBatch(validRows,userId,filename='import.csv',idempotencyKey=null,options={}) {
+  const publish=options.publish===true;
   await requireStaff(userId,['admin','coordinator']);
   if(!Array.isArray(validRows)||!validRows.length||validRows.length>1000) fail('Lô nhập phải có từ 1 đến 1.000 hồ sơ');
   const safeFilename=text(filename,'tên tệp',{required:true,max:255});
@@ -183,16 +184,16 @@ export async function commitBatch(validRows,userId,filename='import.csv',idempot
     if(seen.has(key)) fail('Số giấy phép trùng trong lô nhập');
     seen.add(key);
   }
-  return idempotent('/api/internal/batch-import/commit',userId,idempotencyKey,{rows,filename:safeFilename},async db=>{
+  return idempotent('/api/internal/batch-import/commit',userId,idempotencyKey,{rows,filename:safeFilename,publish},async db=>{
     const batchId=`batch-${crypto.randomUUID()}`;
     const permits=[];
     for(const row of rows) {
       if(await db.get('SELECT id FROM permits WHERE UPPER(permit_number) = ?',[row.permit_number.toUpperCase()])) fail('Số giấy phép đã tồn tại',409);
-      const permit=await createPermit(row,userId);
+      const permit=await createPermit(row,userId,null,{publish});
       permits.push({id:permit.id,permit_number:permit.permit_number});
     }
     await db.run("INSERT INTO import_batches (id,user_id,filename,total_rows,valid_rows,error_rows,status,created_at) VALUES (?,?,?,?,?,0,'committed',?)",[batchId,userId,safeFilename,rows.length,rows.length,new Date().toISOString()]);
-    await audit(db,userId,'COMMIT_BATCH_IMPORT','import_batches',batchId,{filename:safeFilename,count:permits.length});
+    await audit(db,userId,'COMMIT_BATCH_IMPORT','import_batches',batchId,{filename:safeFilename,count:permits.length,published:publish});
     return {success:true,batchId,importedCount:permits.length,permits};
   });
 }

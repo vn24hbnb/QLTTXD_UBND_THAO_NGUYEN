@@ -1,5 +1,11 @@
 # Nhật ký thay đổi
 
+## 2026-09-29 — Công bố giấy phép lên bản đồ người dân
+
+- Nguyên nhân người dân không thấy vị trí giấy phép: hồ sơ nhập vào luôn ở chế độ nội bộ và phải công bố từng hồ sơ.
+- Biểu mẫu nhập tay và nhập CSV có ô "Công bố ngay lên bản đồ công khai" (mặc định bật; chỉ áp dụng cho hồ sơ có vị trí).
+- Thêm nút "Công bố N hồ sơ đã có vị trí" trong Danh sách công trình và `POST /api/internal/permits/publish-all` (chỉ điều phối/quản trị) để công bố hàng loạt các hồ sơ đã nhập trước đó; ghi lịch sử phiên bản và nhật ký kiểm toán cho từng hồ sơ.
+
 ## 2026-09-29 — Hiển thị kiến nghị mới gửi
 
 - Cán bộ thấy ngay mọi phản ánh đang xử lý trên bản đồ (ghim theo tiến độ) và số đếm phản ánh được nạp khi vào trang, không cần mở mục Phản ánh trước.

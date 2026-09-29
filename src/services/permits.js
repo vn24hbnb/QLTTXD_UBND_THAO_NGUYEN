@@ -59,17 +59,19 @@ export async function getInternalPermits(options) { return listPermits(true, opt
 export async function getPermitById(id, isInternal = false) {
   return dbService.get(`SELECT ${isInternal ? '*' : PUBLIC_COLUMNS} FROM permits WHERE id = ?${isInternal ? '' : ' AND is_public = 1'}`, [id]);
 }
-export async function createPermit(data, userId, idempotencyKey = null) {
+export async function createPermit(data, userId, idempotencyKey = null, options = {}) {
   await requireStaff(userId,['admin','coordinator']);
   const d = validatePermit(data);
   const id = `permit-${crypto.randomUUID()}`;
   const now = new Date().toISOString();
   const status = d.longitude == null ? 'Chờ xác nhận vị trí' : 'Cần kiểm tra';
-  return idempotent('/api/internal/permits', userId, idempotencyKey, d, async db => {
+  // Công bố ngay chỉ áp dụng khi có vị trí; người nhập (điều phối/quản trị) chủ động chọn.
+  const publish = options.publish === true && d.longitude != null;
+  return idempotent('/api/internal/permits', userId, idempotencyKey, { ...d, _publish: publish }, async db => {
     if (await db.get('SELECT id FROM permits WHERE UPPER(permit_number) = ?', [d.permit_number.toUpperCase()])) fail('Số giấy phép đã tồn tại', 409);
     const columns = Object.keys(d);
-    await db.run(`INSERT INTO permits (id,${columns.join(',')},status,current_stage,version_id,is_public,created_at,updated_at) VALUES (${Array(columns.length+7).fill('?').join(',')})`,[id,...Object.values(d),status,0,1,0,now,now]);
-    await audit(db,userId,'CREATE_PERMIT','permits',id,{permit_number:d.permit_number,is_public:false});
+    await db.run(`INSERT INTO permits (id,${columns.join(',')},status,current_stage,version_id,is_public,created_at,updated_at) VALUES (${Array(columns.length+7).fill('?').join(',')})`,[id,...Object.values(d),status,0,1,publish?1:0,now,now]);
+    await audit(db,userId,'CREATE_PERMIT','permits',id,{permit_number:d.permit_number,is_public:publish});
     return getPermitById(id,true);
   });
 }
@@ -123,6 +125,23 @@ export async function publishPermit(id, { version_id, is_public }, userId) {
     return getPermitById(id,true);
   });
 }
+/** Công bố hàng loạt các hồ sơ nội bộ đã có vị trí; hồ sơ chưa có vị trí được giữ nguyên và đếm riêng. */
+export async function publishPermitsBulk(userId) {
+  await requireStaff(userId,['admin','coordinator']);
+  return dbService.transaction(async db => {
+    const candidates = await db.all('SELECT * FROM permits WHERE is_public = 0 ORDER BY issue_date DESC, permit_number ASC LIMIT 1000');
+    let published = 0;
+    for (const permit of candidates) {
+      if (permit.longitude == null || permit.latitude == null) continue;
+      await preservePermitHistory(db,permit,userId,'Công bố hàng loạt');
+      const result = await db.run('UPDATE permits SET is_public = 1,version_id = version_id + 1,updated_at = ? WHERE id = ? AND version_id = ? AND is_public = 0',[new Date().toISOString(),permit.id,permit.version_id]);
+      if (Number(result.changes ?? result.rowCount) !== 1) continue;
+      await audit(db,userId,'PUBLISH_PERMIT','permits',permit.id,{oldValue:0,newValue:true,bulk:true});
+      published++;
+    }
+    return { published, skippedNoLocation: candidates.filter(p => p.longitude == null || p.latitude == null).length };
+  });
+}
 export async function resumePermit(id,{version_id,reason},userId) {
   await requireStaff(userId,['admin','coordinator']);
   const changeReason=text(reason,'lý do cho phép tiếp tục thi công',{required:true,max:2000});
@@ -139,4 +158,4 @@ export async function resumePermit(id,{version_id,reason},userId) {
     return result;
   });
 }
-export default {getPublicPermits,getInternalPermits,getPermitById,createPermit,updatePermitStatus,publishPermit,resumePermit};
+export default {getPublicPermits,getInternalPermits,getPermitById,createPermit,updatePermitStatus,publishPermit,publishPermitsBulk,resumePermit};

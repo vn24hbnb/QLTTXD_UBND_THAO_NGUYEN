@@ -56,9 +56,15 @@ export async function handleInternal({ req, res, url, pathname, method, ip, curr
     if (pathname === '/api/internal/permits' && method === 'GET') return dataResponse(res, await permitsService.getInternalPermits(queryOptions(url)));
     if (pathname === '/api/internal/permits' && method === 'POST') {
       requireRole(currentUser, APPROVERS);
-      return dataResponse(res, await permitsService.createPermit(await parseBody(req), userId, req.headers['idempotency-key']), 201, 'Đã tạo hồ sơ giấy phép');
+      const body = await parseBody(req);
+      const { publish, ...permitData } = body;
+      return dataResponse(res, await permitsService.createPermit(permitData, userId, req.headers['idempotency-key'], { publish: publish === true }), 201, 'Đã tạo hồ sơ giấy phép');
     }
-    match = pathname.match(/^\/api\/internal\/permits\/([^/]+)\/publication$/);
+    if (pathname === '/api/internal/permits/publish-all' && method === 'POST') {
+    requireRole(currentUser, APPROVERS);
+    return dataResponse(res, await permitsService.publishPermitsBulk(userId));
+  }
+  match = pathname.match(/^\/api\/internal\/permits\/([^/]+)\/publication$/);
     if (match && method === 'POST') {
       requireRole(currentUser, APPROVERS);
       return dataResponse(res, await permitsService.publishPermit(match[1], await parseBody(req), userId));
@@ -130,7 +136,7 @@ export async function handleInternal({ req, res, url, pathname, method, ip, curr
       requireRole(currentUser, APPROVERS);
       const body = await parseBody(req);
       if (!Array.isArray(body.validRows) || !body.validRows.length || body.validRows.length > 1000) throw fail('Cần từ 1 đến 1000 hồ sơ hợp lệ');
-      return dataResponse(res, await batchImportService.commitBatch(body.validRows, userId, body.filename || 'import.csv', req.headers['idempotency-key']), 201);
+      return dataResponse(res, await batchImportService.commitBatch(body.validRows, userId, body.filename || 'import.csv', req.headers['idempotency-key'], { publish: body.publish === true }), 201);
     }
     if (pathname === '/api/internal/violations' && method === 'GET') return dataResponse(res, await violationsService.getViolations({ permitId: url.searchParams.get('permit_id'), status: url.searchParams.get('status'), overdueOnly: url.searchParams.get('overdue_only') === 'true' }));
     if (pathname === '/api/internal/violations' && method === 'POST') return dataResponse(res, await violationsService.createViolation(await parseBody(req), userId, req.headers['idempotency-key']), 201);
