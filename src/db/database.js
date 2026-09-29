@@ -26,6 +26,7 @@ export function getDatabase(dbPath = process.env.DB_PATH || path.resolve(here, '
   for (const name of fs.readdirSync(directory).filter(n => n.endsWith('.json')).sort()) {
     if (db.prepare('SELECT version FROM schema_migrations WHERE version=?').get(name)) continue;
     const migration = JSON.parse(fs.readFileSync(path.join(directory, name), 'utf8'));
+    if (migration.disableForeignKeys) db.exec('PRAGMA foreign_keys=OFF');
     db.exec('BEGIN IMMEDIATE');
     try {
       for (const [table, columns] of Object.entries(migration.addColumns || {})) {
@@ -36,7 +37,9 @@ export function getDatabase(dbPath = process.env.DB_PATH || path.resolve(here, '
       }
       for (const sql of migration.statements || []) db.exec(sql);
       db.prepare('INSERT INTO schema_migrations VALUES (?,?)').run(name, new Date().toISOString());
+      if (migration.disableForeignKeys && db.prepare('PRAGMA foreign_key_check').all().length) throw new Error(`Migration ${name} làm hỏng ràng buộc khóa ngoại`);
       db.exec('COMMIT');
+      if (migration.disableForeignKeys) db.exec('PRAGMA foreign_keys=ON');
     } catch (error) { db.exec('ROLLBACK'); db.close(); throw error; }
   }
   instance = { dbPath, db };

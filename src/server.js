@@ -17,7 +17,7 @@ import violationsService from './services/violations.js';
 import qrcodeService from './services/qrcode.js';
 
 const PUBLIC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../public');
-const OFFICERS = ['admin', 'coordinator', 'inspector'];
+const OFFICERS = ['admin', 'coordinator', 'inspector', 'receptionist'];
 const APPROVERS = ['admin', 'coordinator'];
 const requestCounts = new Map();
 const WINDOW_MS = 60_000;
@@ -264,6 +264,12 @@ export async function requestHandler(req, res) {
       requireRole(currentUser);
       const userId = currentUser.user_id;
       res.restrictReporterContacts = currentUser.role === 'inspector';
+      if (currentUser.role === 'receptionist') {
+        // Cán bộ tiếp nhận chỉ xem hồ sơ đã công bố/nội bộ ở mức tra cứu và xử lý bước tiếp nhận phản ánh.
+        const allowed = (method === 'GET' && (/^\/api\/internal\/permits(\/[^/]+)?$/.test(pathname) || pathname === '/api/internal/complaints'))
+          || (method === 'POST' && /^\/api\/internal\/complaints\/[^/]+\/step$/.test(pathname));
+        if (!allowed) throw fail('Bạn không có quyền thực hiện chức năng này', 403, 'FORBIDDEN');
+      }
       if (pathname === '/api/internal/permits' && method === 'GET') return dataResponse(res, await permitsService.getInternalPermits(queryOptions(url)));
       if (pathname === '/api/internal/permits' && method === 'POST') {
         requireRole(currentUser, APPROVERS);
@@ -305,6 +311,7 @@ export async function requestHandler(req, res) {
       match = pathname.match(/^\/api\/internal\/complaints\/([^/]+)\/step$/);
       if (match && method === 'POST') {
         const body = await parseBody(req);
+        if (currentUser.role === 'receptionist' && ![1, 2].includes(body.step)) throw fail('Cán bộ tiếp nhận chỉ thực hiện bước tiếp nhận và phân công', 403, 'FORBIDDEN');
         if (currentUser.role === 'inspector') {
           if (![3, 4].includes(body.step) || body.reply !== undefined || body.assigned_to !== undefined || body.approved_read !== undefined) throw fail('Chỉ người điều phối mới có quyền phân công và phê duyệt phản hồi', 403, 'FORBIDDEN');
           const complaint = await complaintsService.getComplaintById(match[1]);

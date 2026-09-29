@@ -6,10 +6,12 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     full_name TEXT NOT NULL,
-    role TEXT NOT NULL CHECK(role IN ('admin', 'coordinator', 'inspector', 'citizen')),
+    role TEXT NOT NULL CHECK(role IN ('admin', 'coordinator', 'inspector', 'receptionist', 'citizen')),
     totp_secret TEXT,
     is_active INTEGER DEFAULT 1,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    failed_login_count INTEGER NOT NULL DEFAULT 0,
+    locked_until TEXT
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -125,6 +127,11 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     ip_address TEXT,
     created_at TEXT NOT NULL
 );
+-- Nhật ký kiểm toán chỉ được ghi thêm, không sửa hoặc xóa.
+CREATE TRIGGER IF NOT EXISTS audit_logs_no_update BEFORE UPDATE ON audit_logs
+BEGIN SELECT RAISE(ABORT, 'Nhật ký kiểm toán không được sửa'); END;
+CREATE TRIGGER IF NOT EXISTS audit_logs_no_delete BEFORE DELETE ON audit_logs
+BEGIN SELECT RAISE(ABORT, 'Nhật ký kiểm toán không được xóa'); END;
 
 CREATE TABLE IF NOT EXISTS idempotency_keys (
     key TEXT PRIMARY KEY,
