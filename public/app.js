@@ -1111,7 +1111,19 @@
   function showPermitList() {
     const term = state.searchQuery.toLocaleLowerCase('vi-VN');
     const list = state.permits.filter(p => [p.permit_number,p.site_address,p.construction_type].some(v => String(v || '').toLocaleLowerCase('vi-VN').includes(term)));
-    openSurfaceModal('Danh sách công trình', `<p>${list.length} hồ sơ${isStaff() ? ' trong phạm vi quản lý' : ' đã duyệt công khai'}.</p>${list.map(p => `<article class="record-row"><strong>${esc(p.permit_number)}</strong><p>${esc(p.site_address)}</p><p>${esc(p.status)} · ${p.done}/4 mốc</p><button type="button" class="google-btn btn-primary btn-sm" data-open-permit="${esc(p.id)}">Xem hồ sơ</button></article>`).join('') || '<p>Chưa tìm thấy công trình phù hợp.</p>'}`);
+    const unpublished = canApprove() ? state.permits.filter(p => !p.is_public && p.latitude != null && p.longitude != null).length : 0;
+    openSurfaceModal('Danh sách công trình', `<p>${list.length} hồ sơ${isStaff() ? ' trong phạm vi quản lý' : ' đã duyệt công khai'}.</p>${unpublished ? `<p><button type="button" id="btn-publish-all" class="google-btn btn-primary">Công bố ${unpublished} hồ sơ đã có vị trí lên bản đồ công khai</button></p>` : ''}${list.map(p => `<article class="record-row"><strong>${esc(p.permit_number)}</strong><p>${esc(p.site_address)}</p><p>${esc(p.status)} · ${p.done}/4 mốc</p><button type="button" class="google-btn btn-primary btn-sm" data-open-permit="${esc(p.id)}">Xem hồ sơ</button></article>`).join('') || '<p>Chưa tìm thấy công trình phù hợp.</p>'}`);
+    q('#btn-publish-all')?.addEventListener('click', async event => {
+      const button = event.currentTarget;
+      if (!window.confirm(`Công bố ${unpublished} hồ sơ lên bản đồ công khai? Người dân sẽ thấy số giấy phép, địa chỉ, vị trí, chỉ giới, số tầng, diện tích và chiều cao.`)) return;
+      button.disabled = true;
+      try {
+        const result = await postJson('/api/internal/permits/publish-all', {}, uniqueKey('publish-all'));
+        await fetchData();
+        showToast(`Đã công bố ${result.data.published} hồ sơ.`);
+        showPermitList();
+      } catch (error) { button.disabled = false; showToast(error.message, 6000); }
+    });
     q('#surface-body').querySelectorAll('[data-open-permit]').forEach(button => button.addEventListener('click', () => {
       const p = state.permits.find(item => item.id === button.dataset.openPermit);
       if (p) { closeSurfaceModal(); selectPermit(p, p.latitude && p.longitude ? [p.latitude,p.longitude] : null); }
@@ -1315,7 +1327,7 @@
     const input = ([name,label,type], needed = false) => `<div><label for="permit-${name}">${label}${needed ? ' *' : ''}</label><input id="permit-${name}" type="${['integer','coordinate'].includes(type) ? 'number' : type}" ${needed ? 'required' : ''} ${['number','integer','coordinate'].includes(type) ? `step="${type === 'integer' ? '1' : 'any'}" ${type === 'coordinate' ? '' : 'min="0"'}` : ''}></div>`;
     let key = uniqueKey('permit');
     let submittedPayload = null;
-    openSurfaceModal('Nhập giấy phép đã cấp', `<form id="form-permit" class="app-form"><p>Hồ sơ mới được lưu nội bộ. Người có quyền sẽ duyệt riêng trước khi công khai.</p><div class="form-grid">${required.map(field=>input(field,true)).join('')}</div><h3>Chỉ tiêu theo giấy phép</h3><p>Chỉ nhập thông tin có trên hồ sơ; có thể để trống mục chưa xác định.</p><div class="form-grid">${optional.map(field=>input(field)).join('')}</div><h3>Vị trí công trình</h3><p>Chọn điểm trên bản đồ hoặc nhập kinh độ, vĩ độ. Nếu vừa vẽ khu đất, tọa độ tâm và diện tích ước tính sẽ được điền sẵn; vui lòng đối chiếu giấy phép trước khi lưu.</p><div class="form-grid">${fields.slice(-2).map(field=>input(field)).join('')}</div><button type="button" id="permit-pick-coordinate" class="google-btn btn-neutral">📍 Chọn tọa độ trên bản đồ</button><p id="permit-coordinate-summary" class="coordinate-summary">${prefill.latitude != null && prefill.longitude != null ? `Tọa độ đã chọn: ${Number(prefill.latitude).toFixed(6)}, ${Number(prefill.longitude).toFixed(6)}` : 'Chưa chọn tọa độ trên bản đồ.'}</p><p id="permit-error" class="form-error" role="alert"></p><button type="submit" class="google-btn btn-primary">Lưu hồ sơ nội bộ</button></form>`);
+    openSurfaceModal('Nhập giấy phép đã cấp', `<form id="form-permit" class="app-form"><p>Chọn công bố ngay để hồ sơ có vị trí hiện trên bản đồ của người dân, hoặc bỏ chọn để lưu nội bộ và công bố sau.</p><div class="form-grid">${required.map(field=>input(field,true)).join('')}</div><h3>Chỉ tiêu theo giấy phép</h3><p>Chỉ nhập thông tin có trên hồ sơ; có thể để trống mục chưa xác định.</p><div class="form-grid">${optional.map(field=>input(field)).join('')}</div><h3>Vị trí công trình</h3><p>Chọn điểm trên bản đồ hoặc nhập kinh độ, vĩ độ. Nếu vừa vẽ khu đất, tọa độ tâm và diện tích ước tính sẽ được điền sẵn; vui lòng đối chiếu giấy phép trước khi lưu.</p><div class="form-grid">${fields.slice(-2).map(field=>input(field)).join('')}</div><button type="button" id="permit-pick-coordinate" class="google-btn btn-neutral">📍 Chọn tọa độ trên bản đồ</button><p id="permit-coordinate-summary" class="coordinate-summary">${prefill.latitude != null && prefill.longitude != null ? `Tọa độ đã chọn: ${Number(prefill.latitude).toFixed(6)}, ${Number(prefill.longitude).toFixed(6)}` : 'Chưa chọn tọa độ trên bản đồ.'}</p><label class="layer-checkbox"><input type="checkbox" id="permit-publish" checked><span>Công bố ngay lên bản đồ công khai. Người dân chỉ thấy số giấy phép, địa chỉ, vị trí, chỉ giới xây dựng, chỉ giới đường đỏ, số tầng, diện tích và chiều cao; không thấy chủ đầu tư hay giấy tờ đất.</span></label><p id="permit-error" class="form-error" role="alert"></p><button type="submit" class="google-btn btn-primary">Lưu hồ sơ</button></form>`);
     const form = q('#form-permit');
     for (const name of ['longitude', 'latitude', 'land_area']) {
       if (prefill[name] != null && Number.isFinite(Number(prefill[name]))) form.querySelector(`#permit-${name}`).value = String(prefill[name]);
@@ -1335,6 +1347,7 @@
       const button = form.querySelector('button[type="submit"]');
       button.disabled = true;
       if (!submittedPayload) submittedPayload = Object.fromEntries(fields.map(([name,,type]) => [name, ['number','integer','coordinate'].includes(type) ? nullableNumber(`#permit-${name}`) : q(`#permit-${name}`).value.trim()]));
+      submittedPayload.publish = q('#permit-publish')?.checked === true;
       form.querySelectorAll('input').forEach(input => { input.disabled = true; });
       let saved = false;
       try {
@@ -1364,7 +1377,7 @@
     let key = uniqueKey('import');
     let submittedPayload = null;
     let committing = false;
-    openSurfaceModal('Nhập danh sách giấy phép từ CSV', `<form id="form-batch" class="app-form"><p>Cột bắt buộc: số giấy phép, ngày cấp, cơ quan cấp, chủ hộ, địa điểm, loại công trình, kinh độ, vĩ độ. Hãy xem trước và sửa hết lỗi trước khi nhập.</p><p><a href="/mau-nhap-giay-phep.csv" download>Tải tệp CSV mẫu</a>. Hỗ trợ CSV UTF-8 dùng dấu phẩy, chấm phẩy hoặc tab; ngày dạng ngày/tháng/năm hoặc năm-tháng-ngày. Tệp Excel cần lưu thành CSV trước khi chọn.</p><label for="batch-file">Chọn tệp CSV UTF-8</label><input type="file" id="batch-file" accept=".csv,text/csv" required><button type="submit" class="google-btn btn-neutral">Kiểm tra và xem trước</button></form><div id="batch-preview"></div><p id="batch-error" class="form-error" role="alert"></p><button id="batch-commit" class="google-btn btn-primary" hidden>Nhập các hồ sơ đã kiểm tra</button>`);
+    openSurfaceModal('Nhập danh sách giấy phép từ CSV', `<form id="form-batch" class="app-form"><p>Cột bắt buộc: số giấy phép, ngày cấp, cơ quan cấp, chủ hộ, địa điểm, loại công trình, kinh độ, vĩ độ. Hãy xem trước và sửa hết lỗi trước khi nhập.</p><p><a href="/mau-nhap-giay-phep.csv" download>Tải tệp CSV mẫu</a>. Hỗ trợ CSV UTF-8 dùng dấu phẩy, chấm phẩy hoặc tab; ngày dạng ngày/tháng/năm hoặc năm-tháng-ngày. Tệp Excel cần lưu thành CSV trước khi chọn.</p><label for="batch-file">Chọn tệp CSV UTF-8</label><input type="file" id="batch-file" accept=".csv,text/csv" required><button type="submit" class="google-btn btn-neutral">Kiểm tra và xem trước</button></form><label class="layer-checkbox"><input type="checkbox" id="batch-publish" checked><span>Công bố ngay lên bản đồ công khai. Người dân chỉ thấy số giấy phép, địa chỉ, vị trí, chỉ giới xây dựng, chỉ giới đường đỏ, số tầng, diện tích và chiều cao; không thấy chủ đầu tư hay giấy tờ đất.</span></label><div id="batch-preview"></div><p id="batch-error" class="form-error" role="alert"></p><button id="batch-commit" class="google-btn btn-primary" hidden>Nhập các hồ sơ đã kiểm tra</button>`);
     const form = q('#form-batch');
     const fileInput = q('#batch-file');
     const previewButton = form.querySelector('button[type="submit"]');
@@ -1400,12 +1413,12 @@
       if(!active() || committing || !preview || preview.errorCount || !preview.validCount)return;
       const button=event.currentTarget;
       committing = true;button.disabled=true;fileInput.disabled=true;previewButton.disabled=true;
-      submittedPayload ||= {validRows:preview.previewRows.map(row=>row.data),filename};
+      submittedPayload ||= {validRows:preview.previewRows.map(row=>row.data),filename,publish:q('#batch-publish')?.checked===true};
       try{
         const result=await postJson('/api/internal/batch-import/commit',submittedPayload,key);
         if(!result.data?.batchId)throw new Error('Chưa nhận được mã lô nhập.');
         if (!active()) return;
-        closeSurfaceModal();await fetchData();showToast(`Đã nhập ${result.data.importedCount} hồ sơ nội bộ.`);
+        closeSurfaceModal();await fetchData();showToast(`Đã nhập ${result.data.importedCount} hồ sơ${submittedPayload.publish ? ' và công bố công khai' : ' nội bộ'}.`);
       }catch(error){
         if (!active()) return;
         if (error.status && error.status < 500) { submittedPayload = null; invalidate(); }
