@@ -3,6 +3,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import dbService from './db/database.js';
 import authService from './services/auth.js';
 
 import { NOT_HANDLED, handlePublic } from './routes/public.js';

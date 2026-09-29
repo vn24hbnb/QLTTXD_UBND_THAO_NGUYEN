@@ -14,7 +14,8 @@
     "backup:cloud": "node --env-file-if-exists=.env scripts/backup-cloud.js",
     "restore:cloud": "node scripts/restore-cloud.js",
     "verify:postgres-restore": "node scripts/verify-postgres-restore.js",
-    "verify:deployment": "node scripts/verify-deployment.js"
+    "verify:deployment": "node scripts/verify-deployment.js",
+    "verify:backup-freshness": "node scripts/check-backup-freshness.js"
   },
   "keywords": [
     "qlttxd",
