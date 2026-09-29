@@ -2,29 +2,25 @@ FROM node:24-alpine
 
 WORKDIR /app
 
-# Thiết lập môi trường sản xuất
-ENV NODE_ENV=production
-ENV PORT=3000
-ENV DB_PATH=/app/data/qlttxd.db
+# Chỉ cài dependency chạy thật; sharp cần bản dựng sẵn cho musl.
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
 
-# Sao chép mã nguồn
-COPY package.json ./
 COPY src/ ./src/
 COPY public/ ./public/
-COPY data/ ./data/
-COPY docs/ ./docs/
+COPY data/thao_nguyen_geo.json ./data/thao_nguyen_geo.json
 COPY scripts/ ./scripts/
 
-# Tạo thư mục dữ liệu và sao lưu
-RUN mkdir -p /app/data/uploads /app/backups
+# Production dùng PostgreSQL/Supabase (DATABASE_URL, SUPABASE_*, TOTP_ENCRYPTION_KEY)
+# truyền qua biến môi trường lúc chạy. Không nạp dữ liệu mẫu và không nhúng bí mật vào image.
+ENV NODE_ENV=production \
+    PORT=3000 \
+    HOST=0.0.0.0
 
-# Nạp dữ liệu ban đầu
-RUN node src/db/seed.js
-
+USER node
 EXPOSE 3000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD node -e "fetch('http://localhost:3000/api/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
 
 CMD ["node", "src/server.js"]

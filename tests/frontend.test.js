@@ -193,3 +193,12 @@ test('frontend nhập CSV thử lại cùng lô và khóa khi chưa nhận xác 
   await h.trigger('batch-commit');assert.equal(h.el('batch-file').disabled,true);await h.trigger('batch-commit');
   const commits=h.requests.filter(req=>req.url.endsWith('/commit'));assert.equal(commits.length,2);assert.equal(commits[0].body,commits[1].body);assert.equal(commits[0].headers['Idempotency-Key'],commits[1].headers['Idempotency-Key']);
 });
+
+test('frontend không tải mã hoặc kiểu dáng từ CDN bên ngoài', async () => {
+  const fs = await import('node:fs/promises');
+  const html = await fs.readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.doesNotMatch(html, /(?:src|href)="https?:\/\/(?!www\.w3\.org)/, 'index.html không được nạp tài nguyên ngoài');
+  for (const file of ['leaflet.js', 'leaflet.css', 'images/marker-icon.png']) await fs.access(new URL(`../public/vendor/leaflet/${file}`, import.meta.url));
+  const server = await fs.readFile(new URL('../src/server.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(server, /unpkg\.com/, 'CSP không được cho phép unpkg');
+});
