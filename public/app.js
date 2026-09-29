@@ -25,6 +25,7 @@
     showMarkers: true,
     showComplaintPins: true,
     complaintPins: [],
+    myComplaintPins: [],
     showComplaints: true,
     geoData: null,
     offlineDrafts: [],
@@ -388,26 +389,57 @@
     await fetchComplaintPins(epoch);
   }
 
-  // Vị trí phản ánh đã được cán bộ xác minh; công khai, không có danh tính hay nội dung phản ánh.
+  // Lớp phản ánh trên bản đồ:
+  //  - Người dân: ghim công khai (đã xác minh) + ghim kiến nghị của chính mình (tra bằng mã bí mật đã lưu).
+  //  - Cán bộ: toàn bộ phản ánh đang xử lý, để thấy ngay kiến nghị mới gửi.
   async function fetchComplaintPins(epoch = state.authEpoch) {
-    try {
-      const result = await api('/api/public/complaints/map');
+    if (isStaff()) {
+      try {
+        const result = await api('/api/internal/complaints');
+        if (epoch !== state.authEpoch) return;
+        state.complaints = result.data || [];
+        state.complaintPins = [];
+        state.myComplaintPins = [];
+        updateFilterCounts();
+      } catch { /* danh sách đầy đủ vẫn mở được từ mục Phản ánh */ }
+    } else {
+      try {
+        const result = await api('/api/public/complaints/map');
+        if (epoch !== state.authEpoch) return;
+        state.complaintPins = Array.isArray(result.data) ? result.data : [];
+      } catch { state.complaintPins = []; }
+      state.complaints = [];
+      const settled = await Promise.allSettled(savedComplaintCodes().slice(0, 10).map(code => api(`/api/public/complaints/lookup?code=${encodeURIComponent(code)}`)));
       if (epoch !== state.authEpoch) return;
-      state.complaintPins = Array.isArray(result.data) ? result.data : [];
-    } catch { state.complaintPins = []; }
+      state.myComplaintPins = settled.filter(r => r.status === 'fulfilled' && r.value?.data).map(r => ({ ...r.value.data, mine: true }));
+    }
     renderComplaintPins();
+  }
+
+  function complaintPinColor(step, mine) {
+    if (mine) return '#e8710a';
+    if (step <= 1) return '#ea4335';
+    if (step <= 3) return '#fbbc04';
+    return step >= 5 ? '#34a853' : '#8e24aa';
   }
 
   function renderComplaintPins() {
     if (!complaintsLayerGroup) return;
     complaintsLayerGroup.clearLayers();
     if (!state.showComplaintPins) return;
-    for (const pin of state.complaintPins) {
-      const lat = Number(pin.latitude), lng = Number(pin.longitude);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-      const icon = L.divIcon({ className: 'google-div-icon', html: getMarkerSvg('#8e24aa', '!', false).replace('google-marker-pin', 'google-marker-pin pin-complaint'), iconSize: [38, 46], iconAnchor: [19, 46], popupAnchor: [0, -42] });
-      L.marker([lat, lng], { icon, title: pin.location_text || 'Vị trí có phản ánh' })
-        .bindPopup(`<strong>Vị trí có phản ánh của người dân</strong><br>${esc(pin.location_text || 'Chưa rõ địa chỉ')}<br><em>${esc(pin.status_label || '')}</em>`)
+    const mine = state.myComplaintPins.map(c => ({ lat: c.latitude, lng: c.longitude, address: c.location_text, status: c.status_label, mine: true, step: Number(c.status_step) }));
+    const seen = new Set(mine.map(c => `${Number(c.lat).toFixed(5)},${Number(c.lng).toFixed(5)}`));
+    const others = isStaff()
+      ? state.complaints.filter(c => !c.master_complaint_id).map(c => ({ lat: c.latitude, lng: c.longitude, address: c.location_text, status: c.status_label, title: c.title, step: Number(c.status_step) }))
+      : state.complaintPins.map(c => ({ lat: c.latitude, lng: c.longitude, address: c.location_text, status: c.status_label, step: c.status_label === 'Đã phản hồi' ? 5 : 4 }))
+          .filter(c => !seen.has(`${Number(c.lat).toFixed(5)},${Number(c.lng).toFixed(5)}`));
+    for (const pin of [...mine, ...others]) {
+      const lat = Number(pin.lat), lng = Number(pin.lng);
+      if (pin.lat == null || pin.lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      const icon = L.divIcon({ className: 'google-div-icon', html: getMarkerSvg(complaintPinColor(pin.step, pin.mine), pin.mine ? 'T' : '!', false).replace('google-marker-pin', 'google-marker-pin pin-complaint'), iconSize: [38, 46], iconAnchor: [19, 46], popupAnchor: [0, -42] });
+      const heading = pin.mine ? 'Kiến nghị của bạn' : isStaff() ? 'Phản ánh của người dân' : 'Vị trí có phản ánh của người dân';
+      L.marker([lat, lng], { icon, title: pin.address || heading })
+        .bindPopup(`<strong>${heading}</strong>${pin.title ? `<br>${esc(pin.title)}` : ''}<br>${esc(pin.address || 'Chưa rõ địa chỉ')}<br><em>${esc(pin.status || '')}</em>`)
         .addTo(complaintsLayerGroup);
     }
   }
@@ -1151,6 +1183,7 @@
         if (!result.data?.id || !result.data?.lookup_code) throw new Error('Máy chủ chưa trả mã tra cứu. Hãy giữ biểu mẫu và gửi lại.');
         const code = result.data.lookup_code;
         const remembered = rememberComplaintCode(code);
+        fetchComplaintPins();
         openSurfaceModal('Đã tiếp nhận phản ánh', `<p>${remembered ? 'Mã tra cứu đã được lưu trên trình duyệt này. Bạn vẫn nên ghi lại để tra cứu trên thiết bị khác.' : 'Hãy ghi lại mã bí mật để tự tra cứu; trình duyệt này không lưu được mã.'}</p><p class="lookup-code">${esc(code)}</p><div class="form-actions"><button id="btn-lookup-submitted" class="google-btn btn-neutral">Tra cứu tiến độ</button><button id="btn-my-complaints-submitted" class="google-btn btn-primary">Kiến nghị của tôi</button></div>`);
         q('#btn-lookup-submitted').addEventListener('click', () => showLookupForm(code));
         q('#btn-my-complaints-submitted').addEventListener('click', showMyComplaintsScreen);
@@ -1249,6 +1282,7 @@
       if (epoch !== state.authEpoch) return;
       state.complaints = result.data || [];
       updateFilterCounts();
+      renderComplaintPins();
       q('#surface-body').innerHTML = state.complaints.map(c => {
         const next = Number(c.status_step) + 1;
         const canStep = next <= 5 && (next <= 2 ? canReceive() : next === 5 ? canApprove() : canInspect());

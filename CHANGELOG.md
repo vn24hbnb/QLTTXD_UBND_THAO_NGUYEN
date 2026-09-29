@@ -1,5 +1,10 @@
 # Nhật ký thay đổi
 
+## 2026-09-29 — Hiển thị kiến nghị mới gửi
+
+- Cán bộ thấy ngay mọi phản ánh đang xử lý trên bản đồ (ghim theo tiến độ) và số đếm phản ánh được nạp khi vào trang, không cần mở mục Phản ánh trước.
+- Người dân thấy ghim "Kiến nghị của bạn" ngay sau khi gửi (tra bằng mã bí mật đã lưu trên trình duyệt); tra cứu trả thêm tọa độ cho đúng người gửi. Ghim công khai của người khác vẫn chỉ hiện khi đã được cán bộ xác minh.
+
 ## 2026-09-29 — Bản đồ công khai hiển thị vị trí phản ánh
 
 - Thêm `GET /api/public/complaints/map` và lớp ghim tím "Vị trí phản ánh nhân dân" trên bản đồ (bật/tắt được), chỉ gồm phản ánh đã được cán bộ xác minh; che số điện thoại/email trong địa chỉ; không lộ mã tra cứu hay nội dung.

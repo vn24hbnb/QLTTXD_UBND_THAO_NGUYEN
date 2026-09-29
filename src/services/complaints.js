@@ -37,7 +37,7 @@ export async function submitComplaint(data,idempotencyKey=null,userId='anonymous
 }
 export async function lookupComplaint(lookupCode) {
   const code=text(lookupCode,'mã tra cứu',{required:true,max:100});
-  const complaint=await dbService.get(`SELECT id,lookup_code,title,content,location_text,status_step,
+  const complaint=await dbService.get(`SELECT id,lookup_code,title,content,location_text,longitude,latitude,status_step,
     CASE WHEN status_step = 5 AND reply_approved_at IS NOT NULL THEN official_reply ELSE NULL END AS official_reply,
     created_at,updated_at FROM complaints WHERE lookup_code = ?`,[code.toUpperCase()]);
   return label(complaint);
