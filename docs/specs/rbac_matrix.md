@@ -15,6 +15,8 @@
 | Nghiệp vụ / Dữ liệu | Khách / Người dân | Cán bộ kiểm tra | Người điều phối | Lãnh đạo / Admin |
 |---|:---:|:---:|:---:|:---:|
 | **Xem bản đồ công khai (vị trí, trạng thái, số tầng, DT)** | Cho phép | Cho phép | Cho phép | Cho phép |
+| **Xem vị trí giấy phép đã công bố và chỉ giới xây dựng, chỉ giới đường đỏ, số tầng, diện tích, chiều cao** | Cho phép | Cho phép | Cho phép | Cho phép |
+| **Xem ghim vị trí có phản ánh đã xác minh (địa chỉ + tiến độ, không danh tính/nội dung)** | Cho phép | Cho phép | Cho phép | Cho phép |
 | **Xem thông tin PII chủ nhà (Họ tên, SĐT, nơi ở)** | **Chặn** | Cho phép | Cho phép | Cho phép |
 | **Nhập hồ sơ GPXD mới** | **Chặn** | **Chặn** | Cho phép | Cho phép |
 | **Lập dự thảo phiếu kiểm tra mốc 1-4 & tải ảnh** | **Chặn** | Cho phép | Cho phép | Cho phép |
@@ -43,3 +45,8 @@
 - Nhật ký kiểm toán chỉ ghi thêm: trigger CSDL chặn UPDATE/DELETE (SQLite và PostgreSQL).
 - Quyền của từng endpoint nằm trong `src/routes/internal.js`; quyền theo vai trò cho cán bộ tiếp nhận được chặn tập trung ở đầu nhóm route nội bộ.
 - **Chưa thực hiện:** giới hạn cán bộ kiểm tra chỉ xem hồ sơ/biên bản được phân công. Hệ thống chưa có mô hình phân công hồ sơ (chỉ phản ánh có `assigned_to`), cần chốt quy trình nghiệp vụ trước khi thêm.
+
+### 5. Bản đồ công khai (cập nhật 29/09/2026)
+- `GET /api/public/permits[/:id]`: chỉ hồ sơ đã công bố, danh sách cột cố định (`PUBLIC_COLUMNS`): định danh và địa chỉ công trình, loại, trạng thái, tọa độ, số tầng, diện tích xây dựng/sàn, chiều cao, chỉ giới đường đỏ, chỉ giới xây dựng, khoảng lùi. Không có chủ đầu tư, thửa đất, giấy tờ đất, đơn vị thiết kế.
+- `GET /api/public/complaints/map`: ghim phản ánh trên bản đồ. Chỉ phản ánh từ bước 4 (đã có kết quả xác minh của cán bộ; hằng số `PUBLIC_MAP_MIN_STEP`), chưa bị gộp, có tọa độ. Trả về `location_text`, tọa độ, nhãn tiến độ ("Đang xử lý"/"Đã phản hồi"), thời điểm cập nhật. Số điện thoại và email lẫn trong địa chỉ được che. Không trả mã tra cứu, tiêu đề, nội dung hay thông tin người gửi.
+- Phản ánh của chính người gửi vẫn chỉ tra cứu được bằng mã bí mật của họ.

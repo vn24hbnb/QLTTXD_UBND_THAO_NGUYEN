@@ -1,5 +1,10 @@
 # Nhật ký thay đổi
 
+## 2026-09-29 — Bản đồ công khai hiển thị vị trí phản ánh
+
+- Thêm `GET /api/public/complaints/map` và lớp ghim tím "Vị trí phản ánh nhân dân" trên bản đồ (bật/tắt được), chỉ gồm phản ánh đã được cán bộ xác minh; che số điện thoại/email trong địa chỉ; không lộ mã tra cứu hay nội dung.
+- Khóa bằng kiểm thử danh sách trường công khai của giấy phép (chỉ giới xây dựng, đường đỏ, số tầng, diện tích, chiều cao).
+
 ## 2026-09-29 — Tăng cường bảo mật và vận hành (1.1.0)
 
 - Token phiên chỉ lưu dạng băm SHA-256; khóa TOTP mã hóa AES-256-GCM (`TOTP_ENCRYPTION_KEY`); khóa tài khoản 15 phút sau 5 lần sai; bắt buộc TOTP cho quản trị và điều phối khi tạo tài khoản.
