@@ -72,3 +72,11 @@ test('maskContacts che số điện thoại và email nhưng giữ địa chỉ 
   assert.equal(maskContacts('gọi +84 912-345-678'), 'gọi [đã ẩn]');
   assert.equal(maskContacts('x@y.vn'), '[đã ẩn]');
 });
+
+test('TRA CỨU: người gửi thấy tọa độ kiến nghị của mình bằng mã bí mật, người khác không tra được', async () => {
+  const own = await (await fetch(`${base}/api/public/complaints/lookup?code=TN-DEMO-CODE0`)).json();
+  assert.equal(own.data.longitude, 104.69);
+  assert.equal(own.data.latitude, 20.9);
+  assert.ok(!('sender_phone' in own.data) && !('sender_email' in own.data));
+  assert.equal((await fetch(`${base}/api/public/complaints/lookup?code=TN-DEMO-KHONGCO`)).status, 404);
+});
